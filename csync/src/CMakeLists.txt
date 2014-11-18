@@ -30,6 +30,7 @@ set(CSYNC_LINK_LIBRARIES
   ${SQLITE3_LIBRARIES}
   ${NEON_LIBRARIES}
   ${HTTPBF_LIBRARY}
+  ${CRYPTO_LIBRARY}
 )
 
 if(HAVE_ICONV AND WITH_ICONV)
@@ -88,6 +89,9 @@ include_directories(
   ${CSYNC_PRIVATE_INCLUDE_DIRS}
 )
 
+find_package(OpenSSL)
+FIND_LIBRARY(CRYPTO_LIBRARY NAMES crypto)
+
 add_library(${CSYNC_LIBRARY} SHARED ${csync_SRCS})
 #add_library(${CSYNC_LIBRARY}_static STATIC ${csync_SRCS})
 
@@ -103,7 +107,7 @@ set_target_properties(
         ${LIBRARY_SOVERSION}
 )
 if(BUILD_OWNCLOUD_OSX_BUNDLE)
-  INSTALL(
+  INSTALL(                                                        
     TARGETS
       ${CSYNC_LIBRARY}
     LIBRARY DESTINATION

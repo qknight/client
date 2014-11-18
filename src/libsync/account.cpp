@@ -21,6 +21,8 @@
 #include "owncloudtheme.h"
 #include "creds/abstractcredentials.h"
 #include "creds/credentialsfactory.h"
+#include "../3rdparty/certificates/p12topem.h"
+
 
 #include <QSettings>
 #include <QMutex>
@@ -32,6 +34,7 @@
 #include <QDir>
 
 #include <QDebug>
+#include <QSslKey>
 
 namespace OCC {
 
@@ -264,6 +267,7 @@ QNetworkReply *Account::headRequest(const QString &relPath)
 QNetworkReply *Account::headRequest(const QUrl &url)
 {
     QNetworkRequest request(url);
+    request.setSslConfiguration(this->createSslConfig());
     return _am->head(request);
 }
 
@@ -275,6 +279,7 @@ QNetworkReply *Account::getRequest(const QString &relPath)
 QNetworkReply *Account::getRequest(const QUrl &url)
 {
     QNetworkRequest request(url);
+    request.setSslConfiguration(this->createSslConfig());
     return _am->get(request);
 }
 
@@ -286,12 +291,65 @@ QNetworkReply *Account::davRequest(const QByteArray &verb, const QString &relPat
 QNetworkReply *Account::davRequest(const QByteArray &verb, const QUrl &url, QNetworkRequest req, QIODevice *data)
 {
     req.setUrl(url);
+    req.setSslConfiguration(this->createSslConfig());
     return _am->sendCustomRequest(req, verb, data);
+}
+
+void Account::setCertificate(QString certficate, QString privateKey) //#UJF
+{
+    _pemCertificate=certficate;
+    _pemPrivateKey=privateKey;
 }
 
 void Account::setSslConfiguration(const QSslConfiguration &config)
 {
     _sslConfiguration = config;
+}
+
+QSslConfiguration Account::createSslConfig()
+{
+  qDebug() << __FUNCTION__ << " Hello world";
+    _am->clearAccessCache();
+    QSslConfiguration sslConfig;
+    QSslCertificate sslCertificate;
+
+    ConfigFile cfgFile;
+    if(!cfgFile.certificatePath().isEmpty() && !cfgFile.certificatePasswd().isEmpty()){
+        resultP12ToPem certif = p12ToPem(cfgFile.certificatePath().toStdString(), cfgFile.certificatePasswd().toStdString());
+        this->setCertificate(QString::fromStdString(certif.Certificate), QString::fromStdString(certif.PrivateKey));
+        _certPath = NULL;
+        _certPasswd = NULL;
+        _certPath = strdup(cfgFile.certificatePath().toLocal8Bit().data());
+        _certPasswd = strdup(cfgFile.certificatePasswd().toLocal8Bit().data());
+        if((_certPath != NULL) && (_certPasswd != NULL)){
+            setCertificatePath(&_certPath, &_certPasswd);
+        }
+    }
+
+    if((_pemCertificate!=NULL)&&(_pemPrivateKey!=NULL)){
+        // Read certificates
+        QByteArray ba = _pemCertificate.toLocal8Bit();
+        QList<QSslCertificate> sslCertificateList = QSslCertificate::fromData(ba, QSsl::Pem);
+        if(sslCertificateList.length() != 0){
+            sslCertificate = sslCertificateList.takeAt(0);
+        }
+        // Read key from file
+        QSslKey privateKey(_pemPrivateKey.toLocal8Bit(), QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey , "");
+
+        // SSL configuration
+        sslConfig.defaultConfiguration();
+        sslConfig.setCaCertificates(QSslSocket::systemCaCertificates());
+        QList<QSslCertificate> caCertifs = sslConfig.caCertificates();
+        sslConfig.setLocalCertificate(sslCertificate);
+        sslConfig.setPrivateKey(privateKey);
+        sslConfig.setProtocol(QSsl::SslV3);
+        qDebug() << "Certificat ajouté à la requête";
+    }
+    else{
+        qDebug() << "Aucun certificat ajouté à la requête !";
+    }
+
+    return sslConfig;
 }
 
 void Account::setApprovedCerts(const QList<QSslCertificate> certs)

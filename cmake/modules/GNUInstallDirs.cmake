@@ -111,7 +111,7 @@ if(NOT DEFINED CMAKE_INSTALL_LIBDIR OR (_libdir_set
   #    second time.
 
   set(_LIBDIR_DEFAULT "lib")
-  # Override this default 'lib' with 'lib64' iff:
+  # Override this default 'lib' with 'lib64'sparsesparsesparsesparse iff:
   #  - we are on Linux system but NOT cross-compiling
   #  - we are NOT on debian
   #  - we are on a 64 bits system
@@ -149,9 +149,9 @@ if(NOT DEFINED CMAKE_INSTALL_LIBDIR OR (_libdir_set
           "Please enable at least one language before including GNUInstallDirs.")
       else()
         if("${CMAKE_SIZEOF_VOID_P}" EQUAL "8")
-          set(_LIBDIR_DEFAULT "lib64")
+          set(_LIBDIR_DEFAULT "lib")
           if(DEFINED _GNUInstallDirs_LAST_CMAKE_INSTALL_PREFIX)
-            set(__LAST_LIBDIR_DEFAULT "lib64")
+            set(__LAST_LIBDIR_DEFAULT "lib")
           endif()
         endif()
       endif()
