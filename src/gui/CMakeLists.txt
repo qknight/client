@@ -23,6 +23,8 @@ set(client_UI
     protocolwidget.ui
     settingsdialog.ui
     sslerrordialog.ui
+    owncloudsetuppage.ui
+    addcertificatedialog.ui
     wizard/owncloudadvancedsetuppage.ui
     wizard/owncloudhttpcredspage.ui
     wizard/owncloudsetupnocredspage.ui
@@ -55,6 +57,7 @@ set(client_SRCS
     syncrunfilelog.cpp
     systray.cpp
     accountmigrator.cpp
+    addcertificatedialog.cpp
     wizard/abstractcredswizardpage.cpp
     wizard/owncloudadvancedsetuppage.cpp
     wizard/owncloudhttpcredspage.cpp
@@ -101,6 +104,7 @@ set(3rdparty_SRC
     ../3rdparty/qtsingleapplication/qtlocalpeer.cpp
     ../3rdparty/qtsingleapplication/qtsingleapplication.cpp
     ../3rdparty/qtsingleapplication/qtsinglecoreapplication.cpp
+    ../3rdparty/certificates/p12topem.cpp
    )
 
 if (APPLE)

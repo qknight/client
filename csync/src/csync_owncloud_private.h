@@ -194,7 +194,7 @@ void fill_webdav_properties_into_resource(struct resource* newres, const ne_prop
 void resourceToFileStat( csync_vio_file_stat_t *lfs, struct resource *res );
 void resource_free(struct resource* o);
 struct resource* resource_dup(struct resource* o);
-void free_fetchCtx( struct listdir_context *ctx );
+static void free_fetchCtx( struct listdir_context *ctx );
 
 const char* csync_owncloud_get_platform(void);
 

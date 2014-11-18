@@ -37,7 +37,7 @@ namespace OCC
 OwncloudWizard::OwncloudWizard(QWidget *parent)
     : QWizard(parent),
       _account(0),
-      _setupPage(new OwncloudSetupPage),
+      _setupPage(new OwncloudSetupPage(this)),
       _httpCredsPage(new OwncloudHttpCredsPage),
       _shibbolethCredsPage(new OwncloudShibbolethCredsPage),
       _advancedSetupPage(new OwncloudAdvancedSetupPage),
@@ -230,6 +230,15 @@ AbstractCredentials* OwncloudWizard::getCredentials() const
   }
 
   return 0;
+}
+
+/**
+ * \author Nourredine OCTEAU
+ * \brief Emet le signal 'Besoin d'un certificat d'authentification'
+ */
+void OwncloudWizard::raiseCertificatePopup()//#UJF
+{
+    emit needCertificate();
 }
 
 

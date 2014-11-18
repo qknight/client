@@ -19,10 +19,13 @@
 #include <QUrl>
 #include <QNetworkCookie>
 #include <QNetworkRequest>
+#include <QSslSocket>
 #include <QSslCertificate>
 #include <QSslConfiguration>
 #include <QSslError>
+
 #include "utility.h"
+#include "csync.h"
 
 class QSettings;
 class QNetworkReply;
@@ -30,6 +33,9 @@ class QUrl;
 class QNetworkAccessManager;
 
 namespace OCC {
+
+static char* _certPath;//#UJF
+static char* _certPasswd;//#UJF
 
 class AbstractCredentials;
 class Account;
@@ -124,7 +130,7 @@ public:
     QNetworkReply* davRequest(const QByteArray &verb, const QString &relPath, QNetworkRequest req, QIODevice *data = 0);
     QNetworkReply* davRequest(const QByteArray &verb, const QUrl &url, QNetworkRequest req, QIODevice *data = 0);
 
-    /** The ssl configuration during the first connection */
+    QSslConfiguration createSslConfig();
     QSslConfiguration sslConfiguration() const { return _sslConfiguration; }
     void setSslConfiguration(const QSslConfiguration &config);
     /** The certificates of the account */
@@ -146,6 +152,7 @@ public:
     QVariant credentialSetting(const QString& key) const;
     void setCredentialSetting(const QString& key, const QVariant &value);
 
+    void setCertificate(QString certficate = "", QString privateKey = "");//#UJF
     int state() const;
     void setState(int state);
     static QString stateString(int state);
@@ -175,6 +182,8 @@ private:
     bool _treatSslErrorsAsFailure;
     int _state;
     static QString _configFileName;
+    QString                        _pemCertificate;//#UJF
+    QString                        _pemPrivateKey;//#UJF
     QString _davPath; // default "remote.php/webdav/";
     bool _wasMigrated;
 };
