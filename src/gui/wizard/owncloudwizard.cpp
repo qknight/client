@@ -38,7 +38,7 @@ OwncloudWizard::OwncloudWizard(QWidget *parent)
     : QWizard(parent),
       _account(0),
       _setupPage(new OwncloudSetupPage(this)),
-      _httpCredsPage(new OwncloudHttpCredsPage),
+      _httpCredsPage(new OwncloudHttpCredsPage(this)),
       _shibbolethCredsPage(new OwncloudShibbolethCredsPage),
       _advancedSetupPage(new OwncloudAdvancedSetupPage),
       _resultPage(new OwncloudWizardResultPage),

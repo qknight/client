@@ -29,7 +29,7 @@ class OwncloudHttpCredsPage : public AbstractCredentialsWizardPage
 {
   Q_OBJECT
 public:
-  OwncloudHttpCredsPage(QWidget* parent=0);
+  OwncloudHttpCredsPage(QWidget* parent);
 
   AbstractCredentials* getCredentials() const Q_DECL_OVERRIDE;
 
