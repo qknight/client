@@ -458,35 +458,38 @@ QuotaInfo *Account::quotaInfo()
     return _quotaInfo;
 }
 
+
 void Account::slotHandleErrors(QNetworkReply *reply , QList<QSslError> errors)
 {
     NetworkJobTimeoutPauser pauser(reply);
-    qDebug() << "SSL-Errors happened for url " << reply->url().toString();
+    QString out;
+    QDebug(&out) << "SSL-Errors happened for url " << reply->url().toString();
     foreach(const QSslError &error, errors) {
-       qDebug() << "\tError in " << error.certificate() << ":"
-                << error.errorString() << "("<< error.error()<< ")";
+        QDebug(&out) << "\tError in " << error.certificate() << ":"
+                << error.errorString() << "("<< error.error() << ")" << "\n";
     }
 
     if( _treatSslErrorsAsFailure ) {
         // User decided once not to trust. Honor this decision.
-        qDebug() << "Certs not trusted by user decision, returning.";
+        qDebug() << out << "Certs not trusted by user decision, returning.";
         return;
     }
 
     QList<QSslCertificate> approvedCerts;
     if (_sslErrorHandler.isNull() ) {
-        qDebug() << Q_FUNC_INFO << "called without valid SSL error handler for account" << url();
+        qDebug() << out << Q_FUNC_INFO << "called without valid SSL error handler for account" << url();
+        return;
+    }
+    
+    if (_sslErrorHandler->handleErrors(errors, &approvedCerts, this)) {
+        QSslSocket::addDefaultCaCertificates(approvedCerts);
+        addApprovedCerts(approvedCerts);
+        // all ssl certs are known and accepted. We can ignore the problems right away.
+//         qDebug() << out << "Certs are known and trusted! This is not an actual error.";
+        reply->ignoreSslErrors();
     } else {
-        if (_sslErrorHandler->handleErrors(errors, &approvedCerts, this)) {
-            QSslSocket::addDefaultCaCertificates(approvedCerts);
-            addApprovedCerts(approvedCerts);
-            // all ssl certs are known and accepted. We can ignore the problems right away.
-            qDebug() << "Certs are already known and trusted, Errors are not valid.";
-            reply->ignoreSslErrors();
-        } else {
-            _treatSslErrorsAsFailure = true;
-            return;
-        }
+        _treatSslErrorsAsFailure = true;
+        return;
     }
 }
 
