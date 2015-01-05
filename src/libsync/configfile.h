@@ -116,7 +116,7 @@ public:
     void saveGeometryHeader(QHeaderView *header);
     void restoreGeometryHeader(QHeaderView *header);
 
-    QString certificatePath() const;//#UJF
+    QString certificatePath() const;
     void setCertificatePath(const QString& cPath);
     QString certificateDate() const;
     void setCertificateDate(const QString& cDate);

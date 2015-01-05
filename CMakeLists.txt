@@ -141,15 +141,13 @@ endif()
 find_package(Sphinx)
 find_package(PdfLatex)
 
-#find_package(OpenSSL)
-#FIND_LIBRARY(CRYPTO_LIBRARY NAMES crypto)
-#LIST(APPEND ADDITIONAL_LIBS ${CRYPTO_LIBRARY})
 
 find_package(SQLite3 3.8.0 REQUIRED)
 # On some OS, we want to use our own, not the system sqlite
 if (USE_OUR_OWN_SQLITE3)
     include_directories(BEFORE ${SQLITE3_INCLUDE_DIR})
 endif()
+
 
 configure_file(config.h.in ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 

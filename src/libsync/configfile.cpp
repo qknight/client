@@ -17,7 +17,6 @@
 #include "configfile.h"
 #include "theme.h"
 #include "utility.h"
-//#include "mirall/owncloudtheme.h"
 
 #include "creds/abstractcredentials.h"
 #include "creds/credentialsfactory.h"
@@ -65,7 +64,7 @@ static const char downloadLimitC[]    = "BWLimit/downloadLimit";
 
 static const char maxLogLinesC[] = "Logging/maxLogLines";
 
-const char certPath[] = "http_certificatePath"; //#UJF
+const char certPath[] = "http_certificatePath";
 const char certDate[] = "http_certificateDate";
 const char certPasswd[] = "http_certificatePasswd";
 QString ConfigFile::_confDir = QString::null;
@@ -577,7 +576,7 @@ void ConfigFile::setCrashReporter(bool enabled)
     settings.setValue(QLatin1String(crashReporterC), enabled);
 }
 
-QString ConfigFile::certificatePath() const //#UJF
+QString ConfigFile::certificatePath() const
 {
     return retrieveData(QString(), QLatin1String(certPath)).toString();
 }

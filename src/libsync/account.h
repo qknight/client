@@ -23,9 +23,7 @@
 #include <QSslCertificate>
 #include <QSslConfiguration>
 #include <QSslError>
-
 #include "utility.h"
-#include "csync.h"
 
 class QSettings;
 class QNetworkReply;
@@ -33,9 +31,6 @@ class QUrl;
 class QNetworkAccessManager;
 
 namespace OCC {
-
-static char* _certPath;//#UJF
-static char* _certPasswd;//#UJF
 
 class AbstractCredentials;
 class Account;
@@ -90,7 +85,7 @@ public:
      * Saves the account to a given settings file
      */
     void save();
-
+    
     /**
      * Creates an account object from from a given settings file.
      */
@@ -152,7 +147,7 @@ public:
     QVariant credentialSetting(const QString& key) const;
     void setCredentialSetting(const QString& key, const QVariant &value);
 
-    void setCertificate(QString certficate = "", QString privateKey = "");//#UJF
+    void setCertificate(QByteArray certficate = QByteArray(), QString privateKey = QString());
     int state() const;
     void setState(int state);
     static QString stateString(int state);
@@ -182,8 +177,8 @@ private:
     bool _treatSslErrorsAsFailure;
     int _state;
     static QString _configFileName;
-    QString                        _pemCertificate;//#UJF
-    QString                        _pemPrivateKey;//#UJF
+    QByteArray _pemCertificate; 
+    QString _pemPrivateKey;  
     QString _davPath; // default "remote.php/webdav/";
     bool _wasMigrated;
 };

@@ -55,8 +55,8 @@ public slots:
   void setConfigExists(  bool );
   void startSpinner();
   void stopSpinner();
-  void slotAskCertificate();//#UJF
-  void slotCertificateAccepted();//#UJF
+  void slotAskSSLClientCertificate();
+  void slotCertificateAccepted();
 
 protected slots:
   void slotUrlChanged(const QString&);
@@ -83,7 +83,7 @@ private:
   QProgressIndicator* _progressIndi;
   QButtonGroup* _selectiveSyncButtons;
   QString _remoteFolder;
-  AddCertificateDialog* addCertDial;//#UJF
+  AddCertificateDialog* addCertDial;
   OwncloudWizard* _ocWizard;
 };
 

@@ -1,9 +1,22 @@
+/*
+ * Copyright (C) by Pierre MOREAU <p.moreau@agim.idshost.fr>
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; version 2 of the License.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
+ * or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License
+ * for more details.
+ */
+
 /**
  * \file p12topem.cpp
- * \brief Librairie statique de conversion d'un p12 en pem
+ * \brief Static library to convert p12 to pem
  * \author Pierre MOREAU <p.moreau@agim.idshost.fr>
  * \version 1.0.0
- * \date 09 Janvier 2014
+ * \date 09 January 2014
  */
 
 #include "p12topem.h"
@@ -12,7 +25,7 @@ using namespace std;
 
 /**
  * \fn string x509ToString (BIO)
- * \brief Fonction de renvoit d'un string depuis un BIO SSL
+ * \brief Return string from BIO SSL
  * \param BIO o PEM_write_BIO_...
  * \return string PEM
  */
@@ -34,10 +47,10 @@ string x509ToString(BIO *o) {
 
 /**
  * \fn resultP12ToPem p12ToPem (string, string)
- * \brief Transforme un P12 en PEM
- * \param string p12File Chemin vers un fichier P12
- * \param string p12Passwd Password du fichier P12
- * \return result (bool ReturnCode, Int ErrorCode, String Commentaire, String PrivateKey, String Certificate)
+ * \brief Convert P12 to PEM
+ * \param string p12File Path to P12 file
+ * \param string p12Passwd Password to open P12 file
+ * \return result (bool ReturnCode, Int ErrorCode, String Comment, String PrivateKey, String Certificate)
  */
 resultP12ToPem p12ToPem(string p12File, string p12Passwd) {
     FILE *fp;
@@ -54,7 +67,7 @@ resultP12ToPem p12ToPem(string p12File, string p12Passwd) {
     resultP12ToPem ret;
     ret.ReturnCode = false;
     ret.ErrorCode = 0;
-    ret.Commentaire = "";
+    ret.Comment = "";
     ret.PrivateKey = "";
     ret.Certificate = "";
     
@@ -62,7 +75,7 @@ resultP12ToPem p12ToPem(string p12File, string p12Passwd) {
     ERR_load_crypto_strings();
     if(!(fp = fopen(p12File.c_str(), "rb"))) {
         ret.ErrorCode = 1;
-        ret.Commentaire = strerror(errno);
+        ret.Comment = strerror(errno);
         return ret;
     }
     
@@ -71,19 +84,19 @@ resultP12ToPem p12ToPem(string p12File, string p12Passwd) {
     
     if (!p12) {
         ret.ErrorCode = 2;
-        ret.Commentaire = "Impossible d'ouvrir le fichier PKCS#12";
+        ret.Comment = "Unable to open PKCS#12 file";
         return ret;
     }
     if (!PKCS12_parse(p12, p12Passwd.c_str(), &pkey, &cert, &ca)) {
         ret.ErrorCode = 3;
-        ret.Commentaire = "Impossible de parser le fichier PKCS#12 (mauvais mot de passe ?)";
+        ret.Comment = "Unable to parse PKCS#12 file (wrong password ?)";
         return ret;
     }
     PKCS12_free(p12);
     
     if (!(pkey && cert)) {
         ret.ErrorCode = 4;
-        ret.Commentaire = "Le certificat et/ou la clef n'existent pas";
+        ret.Comment = "Certificate and/or key file doesn't exists";
     } else {
         PEM_write_bio_PrivateKey(o, pkey, 0, 0, 0, NULL, 0);
         privateKey = x509ToString(o);
@@ -95,7 +108,7 @@ resultP12ToPem p12ToPem(string p12File, string p12Passwd) {
         
         ret.ReturnCode = true;
         ret.ErrorCode = 0;
-        ret.Commentaire = "Tout est OK!";
+        ret.Comment = "All is fine";
         ret.PrivateKey = privateKey;
         ret.Certificate = certificate;
     }

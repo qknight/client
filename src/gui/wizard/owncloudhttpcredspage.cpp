@@ -37,7 +37,7 @@ OwncloudHttpCredsPage::OwncloudHttpCredsPage(QWidget* parent)
     _ui.setupUi(this);
 
     if(parent){
-        _ocWizard = qobject_cast<OwncloudWizard *>(parent);//#UJF
+        _ocWizard = qobject_cast<OwncloudWizard *>(parent);
     }
 
     registerField( QLatin1String("OCUser*"),   _ui.leUsername);

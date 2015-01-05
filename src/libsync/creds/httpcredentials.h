@@ -53,7 +53,7 @@ public:
     void invalidateToken(Account *account) Q_DECL_OVERRIDE;
     QString fetchUser(Account *account);
     virtual bool sslIsTrusted() { return false; }
-    QString certificatePath() const;//#UJF
+    QString certificatePath() const;
     QString certificateDate() const;
     QString certificatePasswd() const;
 
@@ -67,7 +67,7 @@ protected:
     QString _password;
 
 private:
-    QString _certificatePath;//#UJF
+    QString _certificatePath;
     QString _certificateDate;
     QString _certificatePasswd;
     bool _ready;

@@ -61,8 +61,8 @@ public:
     void successfulStep();
     AbstractCredentials* getCredentials() const;
 
-    void raiseCertificatePopup();//#UJF
-    QString ownCloudCertificate;
+    void raiseCertificatePopup();
+    QByteArray ownCloudCertificate;
     QString ownCloudPrivateKey;
     QString ownCloudCertificatePath;
     QString ownCloudCertificatePasswd;
@@ -81,7 +81,7 @@ signals:
     // make sure to connect to this, rather than finished(int)!!
     void basicSetupFinished( int );
     void skipFolderConfiguration();
-    void needCertificate();//#UJF
+    void needCertificate();
 
 private:
     Account* _account;

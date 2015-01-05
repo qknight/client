@@ -108,6 +108,7 @@ struct csync_owncloud_ctx_s {
     int _connected;                   /* flag to indicate if a connection exists, ie.
                                          the dav_session is valid */
 };
+
 typedef struct csync_owncloud_ctx_s csync_owncloud_ctx_t;
 //typedef csync_owncloud_ctx_t* csync_owncloud_ctx_p;
 
@@ -194,7 +195,7 @@ void fill_webdav_properties_into_resource(struct resource* newres, const ne_prop
 void resourceToFileStat( csync_vio_file_stat_t *lfs, struct resource *res );
 void resource_free(struct resource* o);
 struct resource* resource_dup(struct resource* o);
-static void free_fetchCtx( struct listdir_context *ctx );
+void free_fetchCtx( struct listdir_context *ctx );
 
 const char* csync_owncloud_get_platform(void);
 

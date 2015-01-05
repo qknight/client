@@ -32,6 +32,7 @@
 #include <QNetworkCookieJar>
 #include <QFileInfo>
 #include <QDir>
+#include <QTextStream>
 
 #include <QDebug>
 #include <QSslKey>
@@ -145,9 +146,13 @@ Account* Account::restore()
             // Check the theme url to see if it is the same url that the oC config was for
             QString overrideUrl = Theme::instance()->overrideServerUrl();
             if( !overrideUrl.isEmpty() ) {
-                if (overrideUrl.endsWith('/')) { overrideUrl.chop(1); }
+                if (overrideUrl.endsWith('/')) {
+                    overrideUrl.chop(1);
+                }
                 QString oCUrl = oCSettings->value(QLatin1String(urlC)).toString();
-                if (oCUrl.endsWith('/')) { oCUrl.chop(1); }
+                if (oCUrl.endsWith('/')) {
+                    oCUrl.chop(1);
+                }
 
                 // in case the urls are equal reset the settings object to read from
                 // the ownCloud settings object
@@ -295,7 +300,7 @@ QNetworkReply *Account::davRequest(const QByteArray &verb, const QUrl &url, QNet
     return _am->sendCustomRequest(req, verb, data);
 }
 
-void Account::setCertificate(QString certficate, QString privateKey) //#UJF
+void Account::setCertificate(QByteArray certficate, QString privateKey)
 {
     _pemCertificate=certficate;
     _pemPrivateKey=privateKey;
@@ -308,30 +313,26 @@ void Account::setSslConfiguration(const QSslConfiguration &config)
 
 QSslConfiguration Account::createSslConfig()
 {
-  qDebug() << __FUNCTION__ << " Hello world";
-    _am->clearAccessCache();
+    // if setting the client certificate fails, you will probably get an error similar to this:
+    //  "An internal error number 1060 happened. SSL handshake failed, client certificate was requested: SSL error: sslv3 alert handshake failure"
+  
+    // maybe this code must not have to be reevaluated every request?
     QSslConfiguration sslConfig;
-    QSslCertificate sslCertificate;
-
+    QSslCertificate sslClientCertificate;
+    
+    // maybe move this code from createSslConfig to the Account constructor
     ConfigFile cfgFile;
-    if(!cfgFile.certificatePath().isEmpty() && !cfgFile.certificatePasswd().isEmpty()){
+    if(!cfgFile.certificatePath().isEmpty() && !cfgFile.certificatePasswd().isEmpty()) {
         resultP12ToPem certif = p12ToPem(cfgFile.certificatePath().toStdString(), cfgFile.certificatePasswd().toStdString());
-        this->setCertificate(QString::fromStdString(certif.Certificate), QString::fromStdString(certif.PrivateKey));
-        _certPath = NULL;
-        _certPasswd = NULL;
-        _certPath = strdup(cfgFile.certificatePath().toLocal8Bit().data());
-        _certPasswd = strdup(cfgFile.certificatePasswd().toLocal8Bit().data());
-        if((_certPath != NULL) && (_certPasswd != NULL)){
-            setCertificatePath(&_certPath, &_certPasswd);
-        }
+        QString s = QString::fromStdString(certif.Certificate);
+        QByteArray ba = s.toLocal8Bit();
+        this->setCertificate(ba, QString::fromStdString(certif.PrivateKey));
     }
-
-    if((_pemCertificate!=NULL)&&(_pemPrivateKey!=NULL)){
+    if((!_pemCertificate.isEmpty())&&(!_pemPrivateKey.isEmpty())) {
         // Read certificates
-        QByteArray ba = _pemCertificate.toLocal8Bit();
-        QList<QSslCertificate> sslCertificateList = QSslCertificate::fromData(ba, QSsl::Pem);
-        if(sslCertificateList.length() != 0){
-            sslCertificate = sslCertificateList.takeAt(0);
+        QList<QSslCertificate> sslCertificateList = QSslCertificate::fromData(_pemCertificate, QSsl::Pem);
+        if(sslCertificateList.length() != 0) {
+            sslClientCertificate = sslCertificateList.takeAt(0);
         }
         // Read key from file
         QSslKey privateKey(_pemPrivateKey.toLocal8Bit(), QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey , "");
@@ -340,13 +341,11 @@ QSslConfiguration Account::createSslConfig()
         sslConfig.defaultConfiguration();
         sslConfig.setCaCertificates(QSslSocket::systemCaCertificates());
         QList<QSslCertificate> caCertifs = sslConfig.caCertificates();
-        sslConfig.setLocalCertificate(sslCertificate);
+        sslConfig.setLocalCertificate(sslClientCertificate);
         sslConfig.setPrivateKey(privateKey);
-        sslConfig.setProtocol(QSsl::SslV3);
-        qDebug() << "Certificat ajouté à la requête";
-    }
-    else{
-        qDebug() << "Aucun certificat ajouté à la requête !";
+        qDebug() << "Added SSL client certificate to the query";
+    } else {
+        qDebug() << "Failed to add the SSL client certificate to the query!";
     }
 
     return sslConfig;
@@ -459,35 +458,38 @@ QuotaInfo *Account::quotaInfo()
     return _quotaInfo;
 }
 
+
 void Account::slotHandleErrors(QNetworkReply *reply , QList<QSslError> errors)
 {
     NetworkJobTimeoutPauser pauser(reply);
-    qDebug() << "SSL-Errors happened for url " << reply->url().toString();
+    QString out;
+    QDebug(&out) << "SSL-Errors happened for url " << reply->url().toString();
     foreach(const QSslError &error, errors) {
-       qDebug() << "\tError in " << error.certificate() << ":"
-                << error.errorString() << "("<< error.error()<< ")";
+        QDebug(&out) << "\tError in " << error.certificate() << ":"
+                     << error.errorString() << "("<< error.error() << ")" << "\n";
     }
 
     if( _treatSslErrorsAsFailure ) {
         // User decided once not to trust. Honor this decision.
-        qDebug() << "Certs not trusted by user decision, returning.";
+        qDebug() << out << "Certs not trusted by user decision, returning.";
         return;
     }
 
     QList<QSslCertificate> approvedCerts;
     if (_sslErrorHandler.isNull() ) {
-        qDebug() << Q_FUNC_INFO << "called without valid SSL error handler for account" << url();
+        qDebug() << out << Q_FUNC_INFO << "called without valid SSL error handler for account" << url();
+        return;
+    }
+
+    if (_sslErrorHandler->handleErrors(errors, &approvedCerts, this)) {
+        QSslSocket::addDefaultCaCertificates(approvedCerts);
+        addApprovedCerts(approvedCerts);
+        // all ssl certs are known and accepted. We can ignore the problems right away.
+//         qDebug() << out << "Certs are known and trusted! This is not an actual error.";
+        reply->ignoreSslErrors();
     } else {
-        if (_sslErrorHandler->handleErrors(errors, &approvedCerts, this)) {
-            QSslSocket::addDefaultCaCertificates(approvedCerts);
-            addApprovedCerts(approvedCerts);
-            // all ssl certs are known and accepted. We can ignore the problems right away.
-            qDebug() << "Certs are already known and trusted, Errors are not valid.";
-            reply->ignoreSslErrors();
-        } else {
-            _treatSslErrorsAsFailure = true;
-            return;
-        }
+        _treatSslErrorsAsFailure = true;
+        return;
     }
 }
 

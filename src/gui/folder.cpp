@@ -84,7 +84,7 @@ bool Folder::init()
     if (!account) {
         // Normaly this should not happen, but it could be that there is something
         // wrong with the config and it is better not to crash.
-        qWarning() << "WRN: No account  configured, can't sync";
+        qWarning() << "WRN: No account configured, can't sync";
         return false;
     }
 
