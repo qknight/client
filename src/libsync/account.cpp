@@ -342,11 +342,10 @@ QSslConfiguration Account::createSslConfig()
         QList<QSslCertificate> caCertifs = sslConfig.caCertificates();
         sslConfig.setLocalCertificate(sslCertificate);
         sslConfig.setPrivateKey(privateKey);
-        sslConfig.setProtocol(QSsl::SslV3);
-        qDebug() << "Certificat ajouté à la requête";
-    }
-    else{
-        qDebug() << "Aucun certificat ajouté à la requête !";
+        //sslConfig.setProtocol(QSsl::SslV3); //FIXME qknight: this is a broken default
+        qDebug() << "Added client certificate to the query";
+    } else {
+        qDebug() << "Failed to add a client certificate to the query!";
     }
 
     return sslConfig;
