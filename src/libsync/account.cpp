@@ -32,6 +32,7 @@
 #include <QNetworkCookieJar>
 #include <QFileInfo>
 #include <QDir>
+#include <QTextStream>
 
 #include <QDebug>
 #include <QSslKey>
@@ -43,6 +44,10 @@ static const char authTypeC[] = "authType";
 static const char userC[] = "user";
 static const char httpUserC[] = "http_user";
 static const char caCertsKeyC[] = "CaCertificates";
+
+// FIXME: why a global variable?
+static char* _certPath = NULL;
+static char* _certPasswd = NULL;
 
 AccountManager *AccountManager::_instance = 0;
 
@@ -56,6 +61,7 @@ AccountManager *AccountManager::instance()
             _instance = new AccountManager;
         }
     }
+
 
     return _instance;
 }
@@ -82,6 +88,8 @@ Account::Account(AbstractSslErrorHandler *sslErrorHandler, QObject *parent)
 {
     qRegisterMetaType<Account*>("Account*");
 }
+
+
 
 Account::~Account()
 {
@@ -145,9 +153,13 @@ Account* Account::restore()
             // Check the theme url to see if it is the same url that the oC config was for
             QString overrideUrl = Theme::instance()->overrideServerUrl();
             if( !overrideUrl.isEmpty() ) {
-                if (overrideUrl.endsWith('/')) { overrideUrl.chop(1); }
+                if (overrideUrl.endsWith('/')) {
+                    overrideUrl.chop(1);
+                }
                 QString oCUrl = oCSettings->value(QLatin1String(urlC)).toString();
-                if (oCUrl.endsWith('/')) { oCUrl.chop(1); }
+                if (oCUrl.endsWith('/')) {
+                    oCUrl.chop(1);
+                }
 
                 // in case the urls are equal reset the settings object to read from
                 // the ownCloud settings object
@@ -308,30 +320,24 @@ void Account::setSslConfiguration(const QSslConfiguration &config)
 
 QSslConfiguration Account::createSslConfig()
 {
-  qDebug() << __FUNCTION__ << " Hello world";
+    // if setting the client certificate fails, you will probably get an error similar to this:
+    //  "An internal error number 1060 happened. SSL handshake failed, client certificate was requested: SSL error: sslv3 alert handshake failure"
     _am->clearAccessCache();
     QSslConfiguration sslConfig;
-    QSslCertificate sslCertificate;
+    QSslCertificate sslClientCertificate;
 
+    // maybe move this code from createSslConfig to the Account constructor
     ConfigFile cfgFile;
-    if(!cfgFile.certificatePath().isEmpty() && !cfgFile.certificatePasswd().isEmpty()){
+    if(!cfgFile.certificatePath().isEmpty() && !cfgFile.certificatePasswd().isEmpty()) {
         resultP12ToPem certif = p12ToPem(cfgFile.certificatePath().toStdString(), cfgFile.certificatePasswd().toStdString());
         this->setCertificate(QString::fromStdString(certif.Certificate), QString::fromStdString(certif.PrivateKey));
-        _certPath = NULL;
-        _certPasswd = NULL;
-        _certPath = strdup(cfgFile.certificatePath().toLocal8Bit().data());
-        _certPasswd = strdup(cfgFile.certificatePasswd().toLocal8Bit().data());
-        if((_certPath != NULL) && (_certPasswd != NULL)){
-            setCertificatePath(&_certPath, &_certPasswd);
-        }
     }
-
-    if((_pemCertificate!=NULL)&&(_pemPrivateKey!=NULL)){
+    if((_pemCertificate!=NULL)&&(_pemPrivateKey!=NULL)) {
         // Read certificates
         QByteArray ba = _pemCertificate.toLocal8Bit();
         QList<QSslCertificate> sslCertificateList = QSslCertificate::fromData(ba, QSsl::Pem);
-        if(sslCertificateList.length() != 0){
-            sslCertificate = sslCertificateList.takeAt(0);
+        if(sslCertificateList.length() != 0) {
+            sslClientCertificate = sslCertificateList.takeAt(0);
         }
         // Read key from file
         QSslKey privateKey(_pemPrivateKey.toLocal8Bit(), QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey , "");
@@ -340,12 +346,11 @@ QSslConfiguration Account::createSslConfig()
         sslConfig.defaultConfiguration();
         sslConfig.setCaCertificates(QSslSocket::systemCaCertificates());
         QList<QSslCertificate> caCertifs = sslConfig.caCertificates();
-        sslConfig.setLocalCertificate(sslCertificate);
+        sslConfig.setLocalCertificate(sslClientCertificate);
         sslConfig.setPrivateKey(privateKey);
-        //sslConfig.setProtocol(QSsl::SslV3); //FIXME qknight: this is a broken default
-        qDebug() << "Added client certificate to the query";
+        qDebug() << "Added SSL client certificate to the query";
     } else {
-        qDebug() << "Failed to add a client certificate to the query!";
+        qDebug() << "Failed to add the SSL client certificate to the query!";
     }
 
     return sslConfig;
@@ -466,7 +471,7 @@ void Account::slotHandleErrors(QNetworkReply *reply , QList<QSslError> errors)
     QDebug(&out) << "SSL-Errors happened for url " << reply->url().toString();
     foreach(const QSslError &error, errors) {
         QDebug(&out) << "\tError in " << error.certificate() << ":"
-                << error.errorString() << "("<< error.error() << ")" << "\n";
+                     << error.errorString() << "("<< error.error() << ")" << "\n";
     }
 
     if( _treatSslErrorsAsFailure ) {
@@ -480,7 +485,7 @@ void Account::slotHandleErrors(QNetworkReply *reply , QList<QSslError> errors)
         qDebug() << out << Q_FUNC_INFO << "called without valid SSL error handler for account" << url();
         return;
     }
-    
+
     if (_sslErrorHandler->handleErrors(errors, &approvedCerts, this)) {
         QSslSocket::addDefaultCaCertificates(approvedCerts);
         addApprovedCerts(approvedCerts);

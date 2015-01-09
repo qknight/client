@@ -19,7 +19,6 @@
 #include <QSettings>
 #include <QInputDialog>
 
-//FIXME this is a ugly and wrong hack (qknight)
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
 #include <qt5keychain/keychain.h>
 #else
@@ -128,9 +127,22 @@ HttpCredentials::HttpCredentials(const QString& user, const QString& password, c
 {
 }
 
+//FIXME qknight: hacked my stuff in here
+struct clientCertsStruct {
+  char *certificatePath;
+  char *certificatePasswd;
+};
+
 void HttpCredentials::syncContextPreInit (CSYNC* ctx)
 {
     csync_set_auth_callback (ctx, getauth);
+    // create a SSL client certificate configuration in CSYNC*
+    //FIXME qknight: hacked my stuff in here
+    //FIXME qknight: make this code conditional when not using a client certificate
+    struct clientCertsStruct clientCerts;
+    clientCerts.certificatePath = strdup(_certificatePath.toStdString().c_str());
+    clientCerts.certificatePasswd = strdup(_certificatePasswd.toStdString().c_str());
+    csync_set_module_property(ctx, "SSLClientCerts", &clientCerts);
 }
 
 void HttpCredentials::syncContextPreStart (CSYNC* ctx)

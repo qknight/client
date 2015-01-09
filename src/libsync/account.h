@@ -34,9 +34,6 @@ class QNetworkAccessManager;
 
 namespace OCC {
 
-static char* _certPath;//#UJF
-static char* _certPasswd;//#UJF
-
 class AbstractCredentials;
 class Account;
 class QuotaInfo;
@@ -90,7 +87,7 @@ public:
      * Saves the account to a given settings file
      */
     void save();
-
+    
     /**
      * Creates an account object from from a given settings file.
      */

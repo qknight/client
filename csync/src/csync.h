@@ -44,6 +44,11 @@
 extern "C" {
 #endif
 
+struct clientCertsStruct {
+  char *certificatePath;
+  char *certificatePasswd;
+};  
+  
 /*
  * csync file declarations
  */
@@ -221,10 +226,6 @@ typedef void (*csync_log_callback) (int verbosity,
 typedef void (*csync_update_callback) (bool local,
                                     const char *dirUrl,
                                     void *userdata);
-
-//#UJF
-void setCertificatePath(char** certPath, char** certPasswd);
-
 
 /**
  * @brief Check internal csync status.

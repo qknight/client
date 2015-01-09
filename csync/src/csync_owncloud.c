@@ -25,32 +25,6 @@
 #include <inttypes.h>
 #include "csync_private.h"
 
-// CSYNC_THREAD char *certificatePath;//#UJF
-// CSYNC_THREAD char *certificatePasswd;//#UJF
-
-char bar[] = "/home/joachim/ClientCert-Datenhalde.p12";
-char foo[] = "test";
-CSYNC_THREAD char * certificatePath  = bar;//c_strdup ( *certPath );
-CSYNC_THREAD char * certificatePasswd = foo;//c_strdup ( *certPasswd )
-
-
-/*
- * Modification pour lire un certificat
- */
-//#UJF
-void setCertificatePath(char** certPath, char** certPasswd)
-{
-    DEBUG_WEBDAV ( "Info flux: setCertificatePath: certificatePath and certificatePasswd are being update" );
-//     certificatePath = NULL;
-//     certificatePasswd = NULL;
-//     if((certPath != NULL) && (certPasswd != NULL))
-//     {
-//         certificatePath = c_strdup(*certPath);
-//         certificatePasswd = c_strdup(*certPasswd);
-//     }
-	certificatePath =   bar;//c_strdup ( *certPath );
-        certificatePasswd = foo;//c_strdup ( *certPasswd )
-}
 
 /*
  * free the fetchCtx
@@ -105,10 +79,6 @@ struct {
     char *uri;
     char *id;
 } _id_cache = { NULL, NULL };
-
-
-
-
 
 #define PUT_BUFFER_SIZE 1024*5
 
@@ -456,12 +426,13 @@ static int post_send_hook(ne_request *req, void *userdata,
     return NE_REDIRECT;
 }
 
+
 /*
  * Connect to a DAV server
  * This function sets the flag _connected if the connection is established
  * and returns if the flag is set, so calling it frequently is save.
  */
-static int dav_connect(csync_owncloud_ctx_t *ctx,  const char *base_url) {
+static int dav_connect(csync_owncloud_ctx_t *ctx, struct clientCertsStruct* clientCerts, const char *base_url) {
     int useSSL = 0;
     int rc;
     char protocol[6] = {'\0'};
@@ -475,6 +446,7 @@ static int dav_connect(csync_owncloud_ctx_t *ctx,  const char *base_url) {
     if (ctx->_connected) {
         return 0;
     }
+    
 
     rc = c_parse_uri( base_url, &scheme,
                       &ctx->dav_session.user,
@@ -533,13 +505,16 @@ static int dav_connect(csync_owncloud_ctx_t *ctx,  const char *base_url) {
             rc = -1;
             goto out;
         }
-        DEBUG_WEBDAV ( "Info flux: now what #UJF added" );
 
-        //#UJF
         ne_ssl_client_cert *clicert;
-        //FIXME hard hacks here! qknight
-        certificatePath= bar;
-        certificatePasswd =  foo;
+        //FIXME qknight: check if the pointers are freeed after being updated
+        char * certificatePath  = clientCerts->certificatePath;
+        char * certificatePasswd = clientCerts->certificatePasswd;
+
+        if((certificatePath != NULL) && (certificatePasswd != NULL)) {
+            DEBUG_WEBDAV("dav_connect: with certificatePath: %s", certificatePath );
+            DEBUG_WEBDAV("dav_connect: with certificatePasswd: %s", certificatePasswd );
+        } 
         if ( ( certificatePath != NULL ) && ( certificatePasswd != NULL ) ) {
             DEBUG_WEBDAV ( "Info flux: certificatePath and certificatePasswd are set, so we use it" );
             clicert = ne_ssl_clicert_read ( certificatePath );
@@ -558,7 +533,7 @@ static int dav_connect(csync_owncloud_ctx_t *ctx,  const char *base_url) {
             }
         }
         ne_ssl_trust_default_ca( ctx->dav_session.ctx );
-        ne_ssl_set_verify( ctx->dav_session.ctx, ssl_callback_by_neon, ctx);  //TODO géré l'event trust certificate
+        ne_ssl_set_verify( ctx->dav_session.ctx, ssl_callback_by_neon, ctx);  //FIXME qknight: géré l'event trust certificate
     }
 
     /* Hook called when a request is created. It sets the proxy connection header. */
@@ -600,10 +575,10 @@ static void propfind_results_callback(void *userdata,
 {
     struct listdir_context *fetchCtx = userdata;
     struct resource *newres = 0;
-    const char *clength, *modtime = NULL;
-    const char *resourcetype = NULL;
-    const char *md5sum = NULL;
-    const char *file_id = NULL;
+//     const char *clength, *modtime = NULL;
+//     const char *resourcetype = NULL;
+//     const char *md5sum = NULL;
+//     const char *file_id = NULL;
     const ne_status *status = NULL;
     char *path = ne_path_unescape( uri->path );
 
@@ -773,7 +748,7 @@ csync_vio_handle_t *owncloud_opendir(CSYNC *ctx, const char *uri) {
 
     DEBUG_WEBDAV("opendir method called on %s", uri );
 
-    if (dav_connect( ctx->owncloud_context, uri ) < 0) {
+    if (dav_connect( ctx->owncloud_context, ctx->clientCerts, uri ) < 0) {
         DEBUG_WEBDAV("connection failed");
         return NULL;
     }
@@ -946,10 +921,21 @@ int owncloud_set_property(CSYNC* ctx, const char *key, void *data) {
     if( c_streq(key, "redirect_callback")) {
         if (data) {
             csync_owncloud_redirect_callback_t* cb_wrapper = data;
-
             ctx->owncloud_context->dav_session.redir_callback = *cb_wrapper;
         } else {
             ctx->owncloud_context->dav_session.redir_callback = NULL;
+        }
+    }
+    //FIXME qknight: hacky code
+    if( c_streq(key, "SSLClientCerts")) {
+        if (data) {
+            struct clientCertsStruct* clientCerts = (struct clientCertsStruct*) data;
+            struct clientCertsStruct* newCerts = c_malloc(sizeof(struct clientCertsStruct));
+            newCerts->certificatePath = clientCerts->certificatePath;
+            newCerts->certificatePasswd = clientCerts->certificatePasswd;
+            ctx->clientCerts = newCerts;
+        } else {
+//             ctx->owncloud_context->clientCerts = NULL;
         }
     }
 
@@ -967,3 +953,4 @@ void owncloud_init(CSYNC* ctx) {
 }
 
 /* vim: set ts=4 sw=4 et cindent: */
+
