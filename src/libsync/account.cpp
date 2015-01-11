@@ -45,10 +45,6 @@ static const char userC[] = "user";
 static const char httpUserC[] = "http_user";
 static const char caCertsKeyC[] = "CaCertificates";
 
-// FIXME: why a global variable?
-static char* _certPath = NULL;
-static char* _certPasswd = NULL;
-
 AccountManager *AccountManager::_instance = 0;
 
 AccountManager *AccountManager::instance()
@@ -61,7 +57,6 @@ AccountManager *AccountManager::instance()
             _instance = new AccountManager;
         }
     }
-
 
     return _instance;
 }
@@ -88,8 +83,6 @@ Account::Account(AbstractSslErrorHandler *sslErrorHandler, QObject *parent)
 {
     qRegisterMetaType<Account*>("Account*");
 }
-
-
 
 Account::~Account()
 {
@@ -325,7 +318,7 @@ QSslConfiguration Account::createSslConfig()
     _am->clearAccessCache();
     QSslConfiguration sslConfig;
     QSslCertificate sslClientCertificate;
-
+    
     // maybe move this code from createSslConfig to the Account constructor
     ConfigFile cfgFile;
     if(!cfgFile.certificatePath().isEmpty() && !cfgFile.certificatePasswd().isEmpty()) {

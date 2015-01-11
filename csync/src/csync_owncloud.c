@@ -27,64 +27,6 @@
 
 
 /*
- * free the fetchCtx
- */
-static void free_fetchCtx ( struct listdir_context *ctx )
-{
-    struct resource *newres, *res;
-    if ( ! ctx ) return;
-    newres = ctx->list;
-    res = newres;
-
-    ctx->ref--;
-    if ( ctx->ref > 0 ) return;
-
-    SAFE_FREE ( ctx->target );
-
-    while ( res ) {
-        SAFE_FREE ( res->uri );
-        SAFE_FREE ( res->name );
-        SAFE_FREE ( res->md5 );
-        memset ( res->file_id, 0, FILE_ID_BUF_SIZE+1 );
-
-        newres = res->next;
-        SAFE_FREE ( res );
-        res = newres;
-    }
-    SAFE_FREE ( ctx );
-}
-
-
-/*
- * local variables.
- */
-
-struct dav_session_s dav_session; /* The DAV Session, initialised in dav_connect */
-int _connected = 0;                   /* flag to indicate if a connection exists, ie.
-                                     the dav_session is valid */
-
-
-void *_userdata;
-long long chunked_total_size = 0;
-long long chunked_done = 0;
-
-struct listdir_context *propfind_cache = 0;
-
-bool is_first_propfind = true;
-
-
-csync_vio_file_stat_t _stat_cache;
-/* id cache, cache the ETag: header of a GET request */
-struct {
-    char *uri;
-    char *id;
-} _id_cache = { NULL, NULL };
-
-#define PUT_BUFFER_SIZE 1024*5
-
-char _buffer[PUT_BUFFER_SIZE];
-
-/*
  * helper method to build up a user text for SSL problems, called from the
  * verify_sslcert callback.
  */
@@ -197,24 +139,24 @@ static int authentication_callback_by_neon( void *userdata, const char *realm, i
             }
         } else {
                authcb = csync_get_auth_callback( ctx->csync_ctx );
-               if( authcb != NULL ){
-                  /* call the csync callback */
-                  DEBUG_WEBDAV("Call the csync callback for %s", realm );
-                  memset( buf, 0, NE_ABUFSIZ );
-                  (*authcb) ("Enter your username: ", buf, NE_ABUFSIZ-1, 1, 0, csync_get_userdata(ctx->csync_ctx) );
-                  if( strlen(buf) < NE_ABUFSIZ ) {
-                      strcpy( username, buf );
-                  }
-                  memset( buf, 0, NE_ABUFSIZ );
-                  (*authcb) ("Enter your password: ", buf, NE_ABUFSIZ-1, 0, 0, csync_get_userdata(ctx->csync_ctx) );
-                  if( strlen(buf) < NE_ABUFSIZ) {
-                      strcpy( password, buf );
-                  }
-              } else {
-                 re = 1;
-              }
-           }
+            if( authcb != NULL ){
+                /* call the csync callback */
+                DEBUG_WEBDAV("Call the csync callback for %s", realm );
+                memset( buf, 0, NE_ABUFSIZ );
+                (*authcb) ("Enter your username: ", buf, NE_ABUFSIZ-1, 1, 0, csync_get_userdata(ctx->csync_ctx) );
+                if( strlen(buf) < NE_ABUFSIZ ) {
+                    strcpy( username, buf );
+                }
+                memset( buf, 0, NE_ABUFSIZ );
+                (*authcb) ("Enter your password: ", buf, NE_ABUFSIZ-1, 0, 0, csync_get_userdata(ctx->csync_ctx) );
+                if( strlen(buf) < NE_ABUFSIZ) {
+                    strcpy( password, buf );
+                }
+            } else {
+                re = 1;
+            }
         }
+    }
     return re;
 }
 
@@ -508,15 +450,13 @@ static int dav_connect(csync_owncloud_ctx_t *ctx, struct clientCertsStruct* clie
 
         ne_ssl_client_cert *clicert;
         //FIXME qknight: check if the pointers are freeed after being updated
-        char * certificatePath  = clientCerts->certificatePath;
+        char * certificatePath   = clientCerts->certificatePath;
         char * certificatePasswd = clientCerts->certificatePasswd;
 
-        if((certificatePath != NULL) && (certificatePasswd != NULL)) {
-            DEBUG_WEBDAV("dav_connect: with certificatePath: %s", certificatePath );
-            DEBUG_WEBDAV("dav_connect: with certificatePasswd: %s", certificatePasswd );
-        } 
-        if ( ( certificatePath != NULL ) && ( certificatePasswd != NULL ) ) {
-            DEBUG_WEBDAV ( "Info flux: certificatePath and certificatePasswd are set, so we use it" );
+        if(clientCerts != NULL) {
+            DEBUG_WEBDAV("dav_connect: certificatePath and certificatePasswd are set, so we use it" );
+            DEBUG_WEBDAV("    with certificatePath: %s", certificatePath );
+            DEBUG_WEBDAV("    with certificatePasswd: %s", certificatePasswd );
             clicert = ne_ssl_clicert_read ( certificatePath );
             if ( clicert == NULL ) {
                 DEBUG_WEBDAV ( "Error read certificate : %s", ne_get_error ( ctx->dav_session.ctx ) );
@@ -524,16 +464,18 @@ static int dav_connect(csync_owncloud_ctx_t *ctx, struct clientCertsStruct* clie
                 if ( ne_ssl_clicert_encrypted ( clicert ) ) {
                     int rtn = ne_ssl_clicert_decrypt ( clicert, certificatePasswd );
                     if ( !rtn ) {
-                        DEBUG_WEBDAV ( "Certificat correctement dechiffre" );
+                        DEBUG_WEBDAV ( "Certificat correctement dechiffre" );//FIXME qknight: translste
                         ne_ssl_set_clicert ( ctx->dav_session.ctx, clicert );
                     } else {
-                        DEBUG_WEBDAV ( "Certificat pas correctement dechiffre : %s", ne_get_error ( ctx->dav_session.ctx ) );
+                        DEBUG_WEBDAV ( "Certificat pas correctement dechiffre : %s", ne_get_error ( ctx->dav_session.ctx ) );//FIXME qknight: translste
                     }
                 }
             }
+        } else {
+            DEBUG_WEBDAV("dav_connect: error with clientCerts");
         }
         ne_ssl_trust_default_ca( ctx->dav_session.ctx );
-        ne_ssl_set_verify( ctx->dav_session.ctx, ssl_callback_by_neon, ctx);  //FIXME qknight: géré l'event trust certificate
+        ne_ssl_set_verify( ctx->dav_session.ctx, ssl_callback_by_neon, ctx);
     }
 
     /* Hook called when a request is created. It sets the proxy connection header. */
@@ -575,18 +517,10 @@ static void propfind_results_callback(void *userdata,
 {
     struct listdir_context *fetchCtx = userdata;
     struct resource *newres = 0;
-//     const char *clength, *modtime = NULL;
-//     const char *resourcetype = NULL;
-//     const char *md5sum = NULL;
-//     const char *file_id = NULL;
     const ne_status *status = NULL;
     char *path = ne_path_unescape( uri->path );
 
     (void) status;
-    if( ! fetchCtx ) {
-        DEBUG_WEBDAV("No valid fetchContext");
-        return;
-    }
 
     if( ! fetchCtx->target ) {
         DEBUG_WEBDAV("error: target must not be zero!" );
@@ -595,7 +529,6 @@ static void propfind_results_callback(void *userdata,
 
     /* Fill the resource structure with the data about the file */
     newres = c_malloc(sizeof(struct resource));
-    ZERO_STRUCTP(newres);
     newres->uri =  path; /* no need to strdup because ne_path_unescape already allocates */
     newres->name = c_basename( path );
     fill_webdav_properties_into_resource(newres, set);
@@ -935,7 +868,8 @@ int owncloud_set_property(CSYNC* ctx, const char *key, void *data) {
             newCerts->certificatePasswd = clientCerts->certificatePasswd;
             ctx->clientCerts = newCerts;
         } else {
-//             ctx->owncloud_context->clientCerts = NULL;
+            DEBUG_WEBDAV("error: in owncloud_set_property for 'SSLClientCerts'" );
+            ctx->clientCerts = NULL;
         }
     }
 

@@ -17,7 +17,6 @@
 #include "configfile.h"
 #include "theme.h"
 #include "utility.h"
-//#include "mirall/owncloudtheme.h"
 
 #include "creds/abstractcredentials.h"
 #include "creds/credentialsfactory.h"

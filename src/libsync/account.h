@@ -179,8 +179,8 @@ private:
     bool _treatSslErrorsAsFailure;
     int _state;
     static QString _configFileName;
-    QString                        _pemCertificate;//#UJF
-    QString                        _pemPrivateKey;//#UJF
+    QString _pemCertificate; //#UJF
+    QString _pemPrivateKey;  //#UJF
     QString _davPath; // default "remote.php/webdav/";
     bool _wasMigrated;
 };

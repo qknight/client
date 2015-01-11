@@ -114,6 +114,7 @@ HttpCredentials::HttpCredentials()
       _fetchJobInProgress(false),
       _readPwdFromDeprecatedPlace(false)
 {
+      qDebug() << __FUNCTION__ << "without args";
 }
 
 HttpCredentials::HttpCredentials(const QString& user, const QString& password, const QString& certificatePath, const QString& certificateDate, const QString& certificatePasswd)
@@ -125,6 +126,7 @@ HttpCredentials::HttpCredentials(const QString& user, const QString& password, c
       _ready(true),
       _fetchJobInProgress(false)
 {
+      qDebug() << __FUNCTION__ << "with args";
 }
 
 //FIXME qknight: hacked my stuff in here
@@ -135,6 +137,7 @@ struct clientCertsStruct {
 
 void HttpCredentials::syncContextPreInit (CSYNC* ctx)
 {
+    qDebug() << __FUNCTION__;
     csync_set_auth_callback (ctx, getauth);
     // create a SSL client certificate configuration in CSYNC*
     //FIXME qknight: hacked my stuff in here
