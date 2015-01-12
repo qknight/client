@@ -315,7 +315,11 @@ QSslConfiguration Account::createSslConfig()
 {
     // if setting the client certificate fails, you will probably get an error similar to this:
     //  "An internal error number 1060 happened. SSL handshake failed, client certificate was requested: SSL error: sslv3 alert handshake failure"
-    _am->clearAccessCache();
+  
+//     _am->clearAccessCache();//FIXME qknight: this caused the massive: 'The timeout specified has expired: [client 192.168.56.1:43713] AH01991: SSL input filter read failed.'
+    // clearAccessCache()Flushes the internal cache of authentication data and network connections.
+  
+  
     QSslConfiguration sslConfig;
     QSslCertificate sslClientCertificate;
     
