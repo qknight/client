@@ -337,7 +337,7 @@ void OwncloudSetupPage::slotCertificateAccepted()
         validatePage();
     } else {
         QString message;
-        message = certif.Commentaire.c_str();
+        message = certif.Comment.c_str();
         addCertDial->showErrorMessage(message);
         addCertDial->show();
     }
