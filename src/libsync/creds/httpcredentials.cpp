@@ -58,7 +58,7 @@ int getauth(const char *prompt,
     QString qPrompt = QString::fromLatin1( prompt ).trimmed();
     QString user = http_credentials->user();
     QString pwd  = http_credentials->password();
-    QString certificatePath = http_credentials->certificatePath();//#UJF
+    QString certificatePath = http_credentials->certificatePath();
     QString certificateDate = http_credentials->certificateDate();
     QString certificatePasswd = http_credentials->certificatePasswd();
 
@@ -107,45 +107,36 @@ private:
 HttpCredentials::HttpCredentials()
     : _user(),
       _password(),
-      _certificatePath(),//#UJF
+      _certificatePath(),
       _certificateDate(),
       _certificatePasswd(),
       _ready(false),
       _fetchJobInProgress(false),
       _readPwdFromDeprecatedPlace(false)
 {
-      qDebug() << __FUNCTION__ << "without args";
 }
 
 HttpCredentials::HttpCredentials(const QString& user, const QString& password, const QString& certificatePath, const QString& certificateDate, const QString& certificatePasswd)
     : _user(user),
       _password(password),
-      _certificatePath(certificatePath),//#UJF
+      _certificatePath(certificatePath),
       _certificateDate(certificateDate),
       _certificatePasswd(certificatePasswd),
       _ready(true),
       _fetchJobInProgress(false)
 {
-      qDebug() << __FUNCTION__ << "with args";
 }
-
-//FIXME qknight: hacked my stuff in here
-struct clientCertsStruct {
-  char *certificatePath;
-  char *certificatePasswd;
-};
 
 void HttpCredentials::syncContextPreInit (CSYNC* ctx)
 {
-    qDebug() << __FUNCTION__;
     csync_set_auth_callback (ctx, getauth);
-    // create a SSL client certificate configuration in CSYNC*
-    //FIXME qknight: hacked my stuff in here
-    //FIXME qknight: make this code conditional when not using a client certificate
-    struct clientCertsStruct clientCerts;
+    // create a SSL client certificate configuration in CSYNC* ctx
+    struct csync_client_certs_s clientCerts;
     clientCerts.certificatePath = strdup(_certificatePath.toStdString().c_str());
     clientCerts.certificatePasswd = strdup(_certificatePasswd.toStdString().c_str());
     csync_set_module_property(ctx, "SSLClientCerts", &clientCerts);
+    free(clientCerts.certificatePath);
+    free(clientCerts.certificatePasswd);
 }
 
 void HttpCredentials::syncContextPreStart (CSYNC* ctx)
@@ -199,7 +190,7 @@ QString HttpCredentials::password() const
     return _password;
 }
 
-QString HttpCredentials::certificatePath() const//#UJF
+QString HttpCredentials::certificatePath() const
 {
     return _certificatePath;
 }

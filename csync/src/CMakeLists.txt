@@ -107,7 +107,7 @@ set_target_properties(
         ${LIBRARY_SOVERSION}
 )
 if(BUILD_OWNCLOUD_OSX_BUNDLE)
-  INSTALL(                                                        
+  INSTALL(
     TARGETS
       ${CSYNC_LIBRARY}
     LIBRARY DESTINATION

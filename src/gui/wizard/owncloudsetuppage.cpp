@@ -61,9 +61,9 @@ OwncloudSetupPage::OwncloudSetupPage(QWidget *parent)
     connect(_ui.leUrl, SIGNAL(textChanged(QString)), SLOT(slotUrlChanged(QString)));
     connect(_ui.leUrl, SIGNAL(editingFinished()), SLOT(slotUrlEditFinished()));
 
-    addCertDial = new AddCertificateDialog(this);//#UJF
-    _ocWizard = qobject_cast<OwncloudWizard *>(parent);//#UJF
-    connect(_ocWizard,SIGNAL(needCertificate()),this,SLOT(slotAskCertificate()));//#UJF
+    addCertDial = new AddCertificateDialog(this);
+    _ocWizard = qobject_cast<OwncloudWizard *>(parent);
+    connect(_ocWizard,SIGNAL(needCertificate()),this,SLOT(slotAskCertificate()));
 }
 
 void OwncloudSetupPage::setServerUrl( const QString& newUrl )
@@ -234,19 +234,20 @@ void OwncloudSetupPage::setErrorString( const QString& err )
         _ui.errorLabel->setVisible(false);
     } else {
         if (_ui.leUrl->text().startsWith("https://")) {
-            QString msg = tr("<p>Could not connect securely:</p><p>%1</p><p>Do you want to connect unencrypted instead (not recommended)?</p>").arg(err);
-            QString title = tr("Connection failed");
-            //FIXME qknight: have a look at this code
-            /*if (QMessageBox::question(this, title, msg, QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes) {
-                QUrl url(_ui.leUrl->text());
-                url.setScheme("http");
-                _ui.leUrl->setText(url.toString());
-                // skip ahead to next page, since the user would expect us to retry automatically
-                wizard()->next();
-            }*/
-            slotAskCertificate();
+            if (err.contains("SSL handshake failed")) {
+                slotAskCertificate();
+            } else {
+                QString msg = tr("<p>Could not connect securely:</p><p>%1</p><p>Do you want to connect unencrypted instead (not recommended)?</p>").arg(err);
+                QString title = tr("Connection failed");
+                if (QMessageBox::question(this, title, msg, QMessageBox::Yes, QMessageBox::No) == QMessageBox::Yes) {
+                    QUrl url(_ui.leUrl->text());
+                    url.setScheme("http");
+                    _ui.leUrl->setText(url.toString());
+                    // skip ahead to next page, since the user would expect us to retry automatically
+                    wizard()->next();
+                }
+            }
         }
-
         _ui.errorLabel->setVisible(true);
         _ui.errorLabel->setText(err);
     }
@@ -279,21 +280,14 @@ void OwncloudSetupPage::setConfigExists(  bool config )
     }
 }
 
-/**
- * \author Nourredine OCTEAU
- * \brief Fais apparaitre le formulaire demandant le certificat
- */
-void OwncloudSetupPage::slotAskCertificate()//#UJF
+void OwncloudSetupPage::slotAskCertificate()
 {
     addCertDial->show();
     connect(addCertDial, SIGNAL(accepted()),this,SLOT(slotCertificateAccepted()));
 }
 
-/**
- * \author Nourredine OCTEAU
- * \brief Evenement lancé lors de la validation du choix d'un certificat
- */
-void OwncloudSetupPage::slotCertificateAccepted()//#UJF
+//called during the validation of the client certificate.
+void OwncloudSetupPage::slotCertificateAccepted()
 {
     QSslCertificate sslCertificate;
 
@@ -303,7 +297,7 @@ void OwncloudSetupPage::slotCertificateAccepted()//#UJF
         QList<QSslCertificate> sslCertificateList = QSslCertificate::fromData(ba, QSsl::Pem);
         sslCertificate = sslCertificateList.takeAt(0);
 
-        this->_ocWizard->ownCloudCertificate = certif.Certificate.c_str();//#UJF
+        this->_ocWizard->ownCloudCertificate = certif.Certificate.c_str();
         this->_ocWizard->ownCloudPrivateKey = certif.PrivateKey.c_str();
         this->_ocWizard->ownCloudCertificatePath = addCertDial->getCertificatePath();
         this->_ocWizard->ownCloudCertificatePasswd = addCertDial->getCertificatePasswd();
@@ -341,8 +335,7 @@ void OwncloudSetupPage::slotCertificateAccepted()//#UJF
         _DN += _C+_ST+_L+_O+_OU+_CN+_emailAddress;
         addCertDial->Reinit();
         validatePage();
-    }
-    else{
+    } else {
         QString message;
         message = certif.Commentaire.c_str();
         addCertDial->showErrorMessage(message);

@@ -30,7 +30,7 @@ public:
   bool passwordExists() const;
   void removePassword();
   void fixupOldPassword();
-  QString certificatePath() const;//#UJF
+  QString certificatePath() const;
   void setCertificatePath(const QString& cPath);
   QString certificateDate() const;
   void setCertificateDate(const QString& cDate);

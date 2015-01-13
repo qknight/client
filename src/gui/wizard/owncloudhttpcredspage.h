@@ -54,7 +54,7 @@ private:
   bool _checking;
   bool _configExists;
   QProgressIndicator* _progressIndi;
-  OwncloudWizard* _ocWizard; //#UJF
+  OwncloudWizard* _ocWizard;
 };
 
 } // namespace OCC

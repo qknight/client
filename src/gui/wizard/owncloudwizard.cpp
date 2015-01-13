@@ -232,11 +232,8 @@ AbstractCredentials* OwncloudWizard::getCredentials() const
   return 0;
 }
 
-/**
- * \author Nourredine OCTEAU
- * \brief Emet le signal 'Besoin d'un certificat d'authentification'
- */
-void OwncloudWizard::raiseCertificatePopup()//#UJF
+// outputs the signal needed to authenticate a certificate
+void OwncloudWizard::raiseCertificatePopup()
 {
     emit needCertificate();
 }

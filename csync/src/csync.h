@@ -44,7 +44,7 @@
 extern "C" {
 #endif
 
-struct clientCertsStruct {
+struct csync_client_certs_s {
   char *certificatePath;
   char *certificatePasswd;
 };  
@@ -140,6 +140,7 @@ enum csync_ftw_type_e {
     CSYNC_FTW_TYPE_SKIP
 };
 
+
 /**
  * CSync File Traversal structure.
  *
@@ -153,7 +154,6 @@ struct csync_tree_walk_file_s {
     int64_t     size;
     int64_t     inode;
     time_t      modtime;
-
     mode_t      mode;
     enum csync_ftw_type_e     type;
     enum csync_instructions_e instruction;
@@ -195,7 +195,6 @@ typedef void (*csync_log_callback) (int verbosity,
 typedef void (*csync_update_callback) (bool local,
                                     const char *dirUrl,
                                     void *userdata);
-
 
 /**
  * @brief Allocate a csync context.
@@ -398,7 +397,6 @@ void *csync_get_log_userdata(void);
  * @return              0 on success, less than 0 if an error occured.
  */
 int csync_set_log_userdata(void *data);
-
 
 /* Used for special modes or debugging */
 CSYNC_STATUS csync_get_status(CSYNC *ctx);

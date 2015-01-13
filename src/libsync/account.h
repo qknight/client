@@ -23,9 +23,7 @@
 #include <QSslCertificate>
 #include <QSslConfiguration>
 #include <QSslError>
-
 #include "utility.h"
-#include "csync.h"
 
 class QSettings;
 class QNetworkReply;
@@ -149,7 +147,7 @@ public:
     QVariant credentialSetting(const QString& key) const;
     void setCredentialSetting(const QString& key, const QVariant &value);
 
-    void setCertificate(QString certficate = "", QString privateKey = "");//#UJF
+    void setCertificate(QString certficate = QString(), QString privateKey = QString());
     int state() const;
     void setState(int state);
     static QString stateString(int state);
@@ -179,8 +177,8 @@ private:
     bool _treatSslErrorsAsFailure;
     int _state;
     static QString _configFileName;
-    QString _pemCertificate; //#UJF
-    QString _pemPrivateKey;  //#UJF
+    QString _pemCertificate; 
+    QString _pemPrivateKey;  
     QString _davPath; // default "remote.php/webdav/";
     bool _wasMigrated;
 };
