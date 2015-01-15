@@ -55,7 +55,7 @@ public slots:
   void setConfigExists(  bool );
   void startSpinner();
   void stopSpinner();
-  void slotAskCertificate();
+  void slotAskSSLClientCertificate();
   void slotCertificateAccepted();
 
 protected slots:

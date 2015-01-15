@@ -147,7 +147,7 @@ public:
     QVariant credentialSetting(const QString& key) const;
     void setCredentialSetting(const QString& key, const QVariant &value);
 
-    void setCertificate(QString certficate = QString(), QString privateKey = QString());
+    void setCertificate(QByteArray certficate = QByteArray(), QString privateKey = QString());
     int state() const;
     void setState(int state);
     static QString stateString(int state);
@@ -177,7 +177,7 @@ private:
     bool _treatSslErrorsAsFailure;
     int _state;
     static QString _configFileName;
-    QString _pemCertificate; 
+    QByteArray _pemCertificate; 
     QString _pemPrivateKey;  
     QString _davPath; // default "remote.php/webdav/";
     bool _wasMigrated;

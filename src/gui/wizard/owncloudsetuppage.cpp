@@ -63,7 +63,7 @@ OwncloudSetupPage::OwncloudSetupPage(QWidget *parent)
 
     addCertDial = new AddCertificateDialog(this);
     _ocWizard = qobject_cast<OwncloudWizard *>(parent);
-    connect(_ocWizard,SIGNAL(needCertificate()),this,SLOT(slotAskCertificate()));
+    connect(_ocWizard,SIGNAL(needCertificate()),this,SLOT(slotAskSSLClientCertificate()));
 }
 
 void OwncloudSetupPage::setServerUrl( const QString& newUrl )
@@ -234,8 +234,8 @@ void OwncloudSetupPage::setErrorString( const QString& err )
         _ui.errorLabel->setVisible(false);
     } else {
         if (_ui.leUrl->text().startsWith("https://")) {
-            if (err.contains("SSL handshake failed")) {
-                slotAskCertificate();
+            if (err.contains("SSL handshake failed", Qt::CaseInsensitive)) {
+                slotAskSSLClientCertificate();
             } else {
                 QString msg = tr("<p>Could not connect securely:</p><p>%1</p><p>Do you want to connect unencrypted instead (not recommended)?</p>").arg(err);
                 QString title = tr("Connection failed");
@@ -280,7 +280,7 @@ void OwncloudSetupPage::setConfigExists(  bool config )
     }
 }
 
-void OwncloudSetupPage::slotAskCertificate()
+void OwncloudSetupPage::slotAskSSLClientCertificate()
 {
     addCertDial->show();
     connect(addCertDial, SIGNAL(accepted()),this,SLOT(slotCertificateAccepted()));
@@ -293,11 +293,13 @@ void OwncloudSetupPage::slotCertificateAccepted()
 
     resultP12ToPem certif = p12ToPem(addCertDial->getCertificatePath().toStdString() , addCertDial->getCertificatePasswd().toStdString());
     if(certif.ReturnCode){
-        QByteArray ba = QByteArray::fromRawData(certif.Certificate.c_str(), certif.Certificate.length());
+        QString s = QString::fromStdString(certif.Certificate);
+        QByteArray ba = s.toLocal8Bit();
+
         QList<QSslCertificate> sslCertificateList = QSslCertificate::fromData(ba, QSsl::Pem);
         sslCertificate = sslCertificateList.takeAt(0);
 
-        this->_ocWizard->ownCloudCertificate = certif.Certificate.c_str();
+        this->_ocWizard->ownCloudCertificate = ba;
         this->_ocWizard->ownCloudPrivateKey = certif.PrivateKey.c_str();
         this->_ocWizard->ownCloudCertificatePath = addCertDial->getCertificatePath();
         this->_ocWizard->ownCloudCertificatePasswd = addCertDial->getCertificatePasswd();

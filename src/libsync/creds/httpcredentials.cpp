@@ -81,7 +81,7 @@ int getauth(const char *prompt,
 namespace
 {
 const char userC[] = "user";
-const char passwdC[] = "password";
+// const char passwdC[] = "password";
 const char certifPathC[] = "certificatePath";
 const char certifPasswdC[] = "certificatePasswd";
 const char certifDateC[] = "certificateDate";

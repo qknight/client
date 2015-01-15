@@ -300,7 +300,7 @@ QNetworkReply *Account::davRequest(const QByteArray &verb, const QUrl &url, QNet
     return _am->sendCustomRequest(req, verb, data);
 }
 
-void Account::setCertificate(QString certficate, QString privateKey)
+void Account::setCertificate(QByteArray certficate, QString privateKey)
 {
     _pemCertificate=certficate;
     _pemPrivateKey=privateKey;
@@ -324,12 +324,13 @@ QSslConfiguration Account::createSslConfig()
     ConfigFile cfgFile;
     if(!cfgFile.certificatePath().isEmpty() && !cfgFile.certificatePasswd().isEmpty()) {
         resultP12ToPem certif = p12ToPem(cfgFile.certificatePath().toStdString(), cfgFile.certificatePasswd().toStdString());
-        this->setCertificate(QString::fromStdString(certif.Certificate), QString::fromStdString(certif.PrivateKey));
+        QString s = QString::fromStdString(certif.Certificate);
+        QByteArray ba = s.toLocal8Bit();
+        this->setCertificate(ba, QString::fromStdString(certif.PrivateKey));
     }
-    if((_pemCertificate!=NULL)&&(_pemPrivateKey!=NULL)) {
+    if((!_pemCertificate.isEmpty())&&(!_pemPrivateKey.isEmpty())) {
         // Read certificates
-        QByteArray ba = _pemCertificate.toLocal8Bit();
-        QList<QSslCertificate> sslCertificateList = QSslCertificate::fromData(ba, QSsl::Pem);
+        QList<QSslCertificate> sslCertificateList = QSslCertificate::fromData(_pemCertificate, QSsl::Pem);
         if(sslCertificateList.length() != 0) {
             sslClientCertificate = sslCertificateList.takeAt(0);
         }

@@ -62,7 +62,7 @@ public:
     AbstractCredentials* getCredentials() const;
 
     void raiseCertificatePopup();
-    QString ownCloudCertificate;
+    QByteArray ownCloudCertificate;
     QString ownCloudPrivateKey;
     QString ownCloudCertificatePath;
     QString ownCloudCertificatePasswd;
