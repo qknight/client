@@ -17,7 +17,6 @@
 #include "networkjobs.h"
 #include "configfile.h"
 #include "accessmanager.h"
-#include "quotainfo.h"
 #include "owncloudtheme.h"
 #include "creds/abstractcredentials.h"
 #include "creds/credentialsfactory.h"
@@ -61,27 +60,33 @@ AccountManager *AccountManager::instance()
     return _instance;
 }
 
-void AccountManager::setAccount(Account *account)
+void AccountManager::setAccount(AccountPtr account)
 {
-    emit accountAboutToChange(account, _account);
-    std::swap(_account, account);
-    emit accountChanged(_account, account);
+    if (_account) {
+        emit accountRemoved(_account);
+    }
+    _account = account;
+    emit accountAdded(account);
 }
 
 
-Account::Account(AbstractSslErrorHandler *sslErrorHandler, QObject *parent)
+Account::Account(QObject *parent)
     : QObject(parent)
     , _url(Theme::instance()->overrideServerUrl())
-    , _sslErrorHandler(sslErrorHandler)
-    , _quotaInfo(new QuotaInfo(this))
     , _am(0)
     , _credentials(0)
     , _treatSslErrorsAsFailure(false)
-    , _state(Account::Disconnected)
     , _davPath("remote.php/webdav/")
     , _wasMigrated(false)
 {
-    qRegisterMetaType<Account*>("Account*");
+    qRegisterMetaType<AccountPtr>("AccountPtr");
+}
+
+AccountPtr Account::create()
+{
+    AccountPtr acc = AccountPtr(new Account);
+    acc->setSharedThis(acc);
+    return acc;
 }
 
 Account::~Account()
@@ -90,12 +95,22 @@ Account::~Account()
     delete _am;
 }
 
+void Account::setSharedThis(AccountPtr sharedThis)
+{
+    _sharedThis = sharedThis.toWeakRef();
+}
+
+AccountPtr Account::sharedFromThis()
+{
+    return _sharedThis.toStrongRef();
+}
+
 void Account::save()
 {
     QScopedPointer<QSettings> settings(settingsWithGroup(Theme::instance()->appName()));
     settings->setValue(QLatin1String(urlC), _url.toString());
     if (_credentials) {
-        _credentials->persist(this);
+        _credentials->persist(sharedFromThis());
         Q_FOREACH(QString key, _settingsMap.keys()) {
             settings->setValue(key, _settingsMap.value(key));
         }
@@ -119,12 +134,12 @@ void Account::save()
     }
 }
 
-Account* Account::restore()
+AccountPtr Account::restore()
 {
     // try to open the correctly themed settings
     QScopedPointer<QSettings> settings(settingsWithGroup(Theme::instance()->appName()));
 
-    Account *acc = 0;
+    AccountPtr acc;
     bool migratedCreds = false;
 
     // if the settings file could not be opened, the childKeys list is empty
@@ -169,7 +184,8 @@ Account* Account::restore()
     }
 
     if (!settings->childKeys().isEmpty()) {
-        acc = new Account;
+        acc = AccountPtr(new Account);
+        acc->setSharedThis(acc);
 
         acc->setUrl(settings->value(QLatin1String(urlC)).toUrl());
         acc->setCredentials(CredentialsFactory::create(settings->value(QLatin1String(authTypeC)).toString()));
@@ -189,7 +205,7 @@ Account* Account::restore()
         acc->setMigrated(migratedCreds);
         return acc;
     }
-    return 0;
+    return AccountPtr();
 }
 
 static bool isEqualExceptProtocol(const QUrl &url1, const QUrl &url2)
@@ -199,7 +215,7 @@ static bool isEqualExceptProtocol(const QUrl &url1, const QUrl &url2)
             url1.path() != url2.path());
 }
 
-bool Account::changed(Account *other, bool ignoreUrlProtocol) const
+bool Account::changed(AccountPtr other, bool ignoreUrlProtocol) const
 {
     if (!other) {
         return false;
@@ -242,6 +258,8 @@ void Account::setCredentials(AbstractCredentials *cred)
     }
     connect(_am, SIGNAL(sslErrors(QNetworkReply*,QList<QSslError>)),
             SLOT(slotHandleErrors(QNetworkReply*,QList<QSslError>)));
+    connect(_credentials, SIGNAL(fetched()),
+            SLOT(slotCredentialsFetched()));
 }
 
 QUrl Account::davUrl() const
@@ -422,41 +440,7 @@ void Account::setCredentialSetting(const QString &key, const QVariant &value)
     }
 }
 
-int Account::state() const
-{
-    return _state;
-}
 
-void Account::setState(int state)
-{
-    if (_state != state) {
-        qDebug() << "Account state change: "
-                 << stateString(_state) << "->" << stateString(state);
-        _state = state;
-        emit stateChanged(state);
-    }
-}
-
-QString Account::stateString(int state)
-{
-    switch (state)
-    {
-    case Connected:
-        return QLatin1String("Connected");
-    case Disconnected:
-        return QLatin1String("Disconnected");
-    case SignedOut:
-        return QLatin1String("SignedOut");
-    case InvalidCredential:
-        return QLatin1String("InvalidCredential");
-    }
-    return QLatin1String("Unknown");
-}
-
-QuotaInfo *Account::quotaInfo()
-{
-    return _quotaInfo;
-}
 
 
 void Account::slotHandleErrors(QNetworkReply *reply , QList<QSslError> errors)
@@ -479,18 +463,36 @@ void Account::slotHandleErrors(QNetworkReply *reply , QList<QSslError> errors)
     if (_sslErrorHandler.isNull() ) {
         qDebug() << out << Q_FUNC_INFO << "called without valid SSL error handler for account" << url();
         return;
+    } else {
+        if (_sslErrorHandler->handleErrors(errors, &approvedCerts, sharedFromThis())) {
+            QSslSocket::addDefaultCaCertificates(approvedCerts);
+            addApprovedCerts(approvedCerts);
+            // all ssl certs are known and accepted. We can ignore the problems right away.
+//             qDebug() << "Certs are already known and trusted, Errors are not valid.";
+            reply->ignoreSslErrors();
+        } else {
+            _treatSslErrorsAsFailure = true;
+            return;
+        }
+    }
+}
+
+void Account::slotCredentialsFetched()
+{
+    emit credentialsFetched(_credentials);
+}
+
+void Account::handleInvalidCredentials()
+{
+    // invalidate & forget token/password
+    // but try to re-sign in.
+    if (_credentials->ready()) {
+        _credentials->invalidateAndFetch(sharedFromThis());
+    } else {
+        _credentials->fetch(sharedFromThis());
     }
 
-    if (_sslErrorHandler->handleErrors(errors, &approvedCerts, this)) {
-        QSslSocket::addDefaultCaCertificates(approvedCerts);
-        addApprovedCerts(approvedCerts);
-        // all ssl certs are known and accepted. We can ignore the problems right away.
-//         qDebug() << out << "Certs are known and trusted! This is not an actual error.";
-        reply->ignoreSslErrors();
-    } else {
-        _treatSslErrorsAsFailure = true;
-        return;
-    }
+    emit invalidCredentials();
 }
 
 bool Account::wasMigrated()

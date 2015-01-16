@@ -21,11 +21,11 @@ if ( APPLE )
     )
 endif()
 
-IF(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+IF(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD" OR ${CMAKE_SYSTEM_NAME} MATCHES "NetBSD")
     list(APPEND OS_SPECIFIC_LINK_LIBRARIES
 	inotify
     )
-ENDIF(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+ENDIF(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD" OR ${CMAKE_SYSTEM_NAME} MATCHES "NetBSD")
 
 if(SPARKLE_FOUND AND NOT BUILD_LIBRARIES_ONLY)
     list (APPEND OS_SPECIFIC_LINK_LIBRARIES ${SPARKLE_LIBRARY})
@@ -53,7 +53,6 @@ set(libsync_SRCS
     propagateremotedelete.cpp
     propagateremotemove.cpp
     propagateremotemkdir.cpp
-    quotainfo.cpp
     syncengine.cpp
     syncfilestatus.cpp
     syncjournaldb.cpp

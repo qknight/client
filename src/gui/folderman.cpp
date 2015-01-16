@@ -20,6 +20,7 @@
 #include "socketapi.h"
 #include "account.h"
 #include "accountmigrator.h"
+#include "accountstate.h"
 
 #include <neon/ne_socket.h>
 
@@ -70,6 +71,9 @@ FolderMan::FolderMan(QObject *parent) :
     _etagPollTimer.setInterval( polltime );
     QObject::connect(&_etagPollTimer, SIGNAL(timeout()), this, SLOT(slotEtagPollTimerTimeout()));
     _etagPollTimer.start();
+
+    connect(AccountStateManager::instance(), SIGNAL(accountStateRemoved(AccountState*)),
+            SLOT(slotRemoveFoldersForAccount(AccountState*)));
 }
 
 FolderMan *FolderMan::instance()
@@ -199,7 +203,7 @@ int FolderMan::setupFolders()
 
   if( list.count() == 0 ) {
       // maybe the account was just migrated.
-      Account *acc = AccountManager::instance()->account();
+      AccountPtr acc = AccountManager::instance()->account();
       if ( acc && acc->wasMigrated() ) {
           AccountMigrator accMig;
           list = accMig.migrateFolderDefinitons();
@@ -226,6 +230,7 @@ bool FolderMan::ensureJournalGone(const QString &localPath)
     // remove old .csync_journal file
     QString stateDbFile = localPath+QLatin1String("/.csync_journal.db");
     while (QFile::exists(stateDbFile) && !QFile::remove(stateDbFile)) {
+        qDebug() << "Could not remove old db file at" << stateDbFile;
         int ret = QMessageBox::warning(0, tr("Could not reset folder state"),
                                        tr("An old sync journal '%1' was found, "
                                           "but could not be removed. Please make sure "
@@ -269,6 +274,11 @@ QString FolderMan::escapeAlias( const QString& alias )
     a.replace( QLatin1Char('['), PAR_O_TAG );
     a.replace( QLatin1Char(']'), PAR_C_TAG );
     return a;
+}
+
+SocketApi *FolderMan::socketApi()
+{
+    return this->_socketApi;
 }
 
 QString FolderMan::unescapeAlias( const QString& alias ) const
@@ -344,7 +354,13 @@ Folder* FolderMan::setupFolderFromConfigFile(const QString &file) {
         targetPath.remove(0,1);
     }
 
-    folder = new Folder( alias, path, targetPath, this );
+    AccountState* accountState = AccountStateManager::instance()->accountState();
+    if (!accountState) {
+        qWarning() << "can't create folder without an account";
+        return 0;
+    }
+
+    folder = new Folder( accountState, alias, path, targetPath, this );
     folder->setConfigFile(cfgFile.absoluteFilePath());
     folder->setSelectiveSyncBlackList(blackList);
     qDebug() << "Adding folder to Folder Map " << folder;
@@ -611,6 +627,24 @@ void FolderMan::slotEtagPollTimerTimeout()
     }
 }
 
+void FolderMan::slotRemoveFoldersForAccount(AccountState* accountState)
+{
+    QStringList foldersToRemove;
+    Folder::MapIterator i(_folderMap);
+    while (i.hasNext()) {
+        i.next();
+        Folder* folder = i.value();
+        if (folder->accountState() == accountState) {
+            foldersToRemove.append(folder->alias());
+        }
+    }
+
+    qDebug() << "Account was removed, removing associated folders:" << foldersToRemove;
+    foreach (const QString& alias, foldersToRemove) {
+        slotRemoveFolder(alias);
+    }
+}
+
 void FolderMan::slotFolderSyncStarted( )
 {
     qDebug() << ">===================================== sync started for " << _currentSyncFolder;
@@ -631,9 +665,12 @@ void FolderMan::slotFolderSyncFinished( const SyncResult& )
     QTimer::singleShot(200, this, SLOT(slotStartScheduledFolderSync()));
 }
 
-void FolderMan::addFolderDefinition(const QString& alias, const QString& sourceFolder,
-                                    const QString& targetPath, const QStringList &selectiveSyncBlackList )
+bool FolderMan::addFolderDefinition(const QString& alias, const QString& sourceFolder,
+                                    const QString& targetPath, const QStringList& selectiveSyncBlackList)
 {
+    if (! ensureJournalGone(sourceFolder))
+        return false;
+
     QString escapedAlias = escapeAlias(alias);
     // Create a settings file named after the alias
     QSettings settings( _folderConfigPath + QLatin1Char('/') + escapedAlias, QSettings::IniFormat);
@@ -645,6 +682,8 @@ void FolderMan::addFolderDefinition(const QString& alias, const QString& sourceF
     settings.setValue(QLatin1String("connection"),  Theme::instance()->appName());
     settings.setValue(QLatin1String("blackList"), selectiveSyncBlackList);
     settings.sync();
+
+    return true;
 }
 
 Folder *FolderMan::folderForPath(const QString &path)
@@ -659,7 +698,7 @@ Folder *FolderMan::folderForPath(const QString &path)
             return folder;
         }
     }
-    qDebug() << "ERROR: could not find folder for " << absolutePath;
+
     return 0;
 }
 

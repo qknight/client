@@ -51,7 +51,7 @@ public:
   void setAuthType(WizardCommon::AuthType type);
 
 public slots:
-  void setErrorString( const QString&  );
+  void setErrorString( const QString&);
   void setConfigExists(  bool );
   void startSpinner();
   void stopSpinner();

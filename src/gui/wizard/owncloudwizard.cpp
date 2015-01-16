@@ -84,12 +84,12 @@ OwncloudWizard::OwncloudWizard(QWidget *parent)
 
 }
 
-void OwncloudWizard::setAccount(Account *account)
+void OwncloudWizard::setAccount(AccountPtr account)
 {
     _account = account;
 }
 
-Account *OwncloudWizard::account() const
+AccountPtr OwncloudWizard::account() const
 {
     return _account;
 }
@@ -104,9 +104,9 @@ QString OwncloudWizard::localFolder() const
     return(_advancedSetupPage->localFolder());
 }
 
-QStringList OwncloudWizard::blacklist() const
+QStringList OwncloudWizard::selectiveSyncBlacklist() const
 {
-    return _advancedSetupPage->blacklist();
+    return _advancedSetupPage->selectiveSyncBlacklist();
 }
 
 

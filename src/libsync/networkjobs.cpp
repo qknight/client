@@ -42,7 +42,7 @@ namespace OCC {
 
 bool AbstractNetworkJob::preOc7WasDetected = false;
 
-AbstractNetworkJob::AbstractNetworkJob(Account *account, const QString &path, QObject *parent)
+AbstractNetworkJob::AbstractNetworkJob(AccountPtr account, const QString &path, QObject *parent)
     : QObject(parent)
     , _duration(0)
     , _timedout(false)
@@ -63,7 +63,7 @@ AbstractNetworkJob::AbstractNetworkJob(Account *account, const QString &path, QO
     // This is a workaround for OC instances which only support one
     // parallel up and download
     if (_account) {
-        connect(_account, SIGNAL(propagatorNetworkActivity()), SLOT(resetTimeout()));
+        connect(_account.data(), SIGNAL(propagatorNetworkActivity()), SLOT(resetTimeout()));
     }
 }
 
@@ -170,7 +170,6 @@ void AbstractNetworkJob::slotFinished()
     _responseTimestamp = QString::fromAscii(_reply->rawHeader("Date"));
     _duration = _durationTimer.elapsed();
 
-
     if (_followRedirects) {
         // ### the qWarnings here should be exported via displayErrors() so they
         // ### can be presented to the user if the job executor has a GUI
@@ -192,22 +191,12 @@ void AbstractNetworkJob::slotFinished()
         }
     }
 
-    bool discard = finished();
     AbstractCredentials *creds = _account->credentials();
-    if (!creds->stillValid(_reply) &&! _ignoreCredentialFailure
-            && _account->state() != Account::InvalidCredential) {
-        _account->setState(Account::InvalidCredential);
-
-        // invalidate & forget token/password
-        // but try to re-sign in.
-        connect( creds, SIGNAL(fetched()),
-                 qApp, SLOT(slotCredentialsFetched()), Qt::UniqueConnection);
-        if (creds->ready()) {
-            creds->invalidateAndFetch(_account);
-        } else {
-            creds->fetch(_account);
-        }
+    if (!creds->stillValid(_reply) && ! _ignoreCredentialFailure) {
+        _account->handleInvalidCredentials();
     }
+
+    bool discard = finished();
     if (discard) {
         deleteLater();
     }
@@ -252,7 +241,7 @@ void AbstractNetworkJob::slotTimeout()
 
 /*********************************************************************************************/
 
-RequestEtagJob::RequestEtagJob(Account *account, const QString &path, QObject *parent)
+RequestEtagJob::RequestEtagJob(AccountPtr account, const QString &path, QObject *parent)
     : AbstractNetworkJob(account, path, parent)
 {
 }
@@ -312,7 +301,7 @@ bool RequestEtagJob::finished()
 
 /*********************************************************************************************/
 
-MkColJob::MkColJob(Account *account, const QString &path, QObject *parent)
+MkColJob::MkColJob(AccountPtr account, const QString &path, QObject *parent)
     : AbstractNetworkJob(account, path, parent)
 {
 }
@@ -334,7 +323,7 @@ bool MkColJob::finished()
 
 /*********************************************************************************************/
 
-LsColJob::LsColJob(Account *account, const QString &path, QObject *parent)
+LsColJob::LsColJob(AccountPtr account, const QString &path, QObject *parent)
     : AbstractNetworkJob(account, path, parent)
 {
 }
@@ -347,6 +336,7 @@ void LsColJob::start()
                    "<d:propfind xmlns:d=\"DAV:\">\n"
                    "  <d:prop>\n"
                    "    <d:resourcetype/>\n"
+                   "    <d:quota-used-bytes/>\n"
                    "  </d:prop>\n"
                    "</d:propfind>\n");
     QBuffer *buf = new QBuffer(this);
@@ -379,8 +369,19 @@ bool LsColJob::finished()
                 } else if (name == QLatin1String("collection") &&
                            !currentItem.isEmpty()) {
                     folders.append(QUrl::fromEncoded(currentItem.toLatin1()).path());
-                    currentItem.clear();
+                } else if (name == QLatin1String("quota-used-bytes") &&
+                           !currentItem.isEmpty()) {
+                    bool ok = false;
+                    auto s = reader.readElementText().toLongLong(&ok);
+                    if (ok) {
+                        _sizes[currentItem] = s;
+                    }
+
                 }
+            } else if (type == QXmlStreamReader::EndElement &&
+                    reader.namespaceUri() == QLatin1String("DAV:") &&
+                    reader.name() == QLatin1String("response")) {
+                currentItem.clear();
             }
         }
         emit directoryListing(folders);
@@ -395,7 +396,7 @@ const char statusphpC[] = "status.php";
 const char owncloudDirC[] = "owncloud/";
 }
 
-CheckServerJob::CheckServerJob(Account *account, QObject *parent)
+CheckServerJob::CheckServerJob(AccountPtr account, QObject *parent)
     : AbstractNetworkJob(account, QLatin1String(statusphpC) , parent)
     , _subdirFallback(false)
 {
@@ -484,7 +485,7 @@ bool CheckServerJob::finished()
 
 /*********************************************************************************************/
 
-PropfindJob::PropfindJob(Account *account, const QString &path, QObject *parent)
+PropfindJob::PropfindJob(AccountPtr account, const QString &path, QObject *parent)
     : AbstractNetworkJob(account, path, parent)
 {
 
@@ -572,7 +573,7 @@ bool PropfindJob::finished()
 
 /*********************************************************************************************/
 
-EntityExistsJob::EntityExistsJob(Account *account, const QString &path, QObject *parent)
+EntityExistsJob::EntityExistsJob(AccountPtr account, const QString &path, QObject *parent)
     : AbstractNetworkJob(account, path, parent)
 {
 }
@@ -592,7 +593,7 @@ bool EntityExistsJob::finished()
 
 /*********************************************************************************************/
 
-CheckQuotaJob::CheckQuotaJob(Account *account, const QString &path, QObject *parent)
+CheckQuotaJob::CheckQuotaJob(AccountPtr account, const QString &path, QObject *parent)
     : AbstractNetworkJob(account, path, parent)
 {
 }

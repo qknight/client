@@ -22,6 +22,7 @@ set(client_UI
     networksettings.ui
     protocolwidget.ui
     settingsdialog.ui
+    sharedialog.ui
     sslerrordialog.ui
     owncloudsetuppage.ui
     addcertificatedialog.ui
@@ -51,6 +52,7 @@ set(client_SRCS
     protocolwidget.cpp
     selectivesyncdialog.cpp
     settingsdialog.cpp
+    sharedialog.cpp
     socketapi.cpp
     sslbutton.cpp
     sslerrordialog.cpp
@@ -58,6 +60,8 @@ set(client_SRCS
     systray.cpp
     accountmigrator.cpp
     addcertificatedialog.cpp
+    quotainfo.cpp
+    accountstate.cpp
     wizard/abstractcredswizardpage.cpp
     wizard/owncloudadvancedsetuppage.cpp
     wizard/owncloudhttpcredspage.cpp
@@ -66,6 +70,7 @@ set(client_SRCS
     wizard/owncloudwizardcommon.cpp
     wizard/owncloudwizard.cpp
     wizard/owncloudwizardresultpage.cpp
+    ../3rdparty/qjson/json.cpp
 )
 
 

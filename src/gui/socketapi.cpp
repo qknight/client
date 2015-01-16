@@ -88,7 +88,7 @@ SocketApi::SocketApi(QObject* parent)
         // We use the generic SyncStateHelper name on OS X since the different branded clients
         // should unfortunately not mention that they are ownCloud :-)
 #endif
-    } else if( Utility::isLinux() ) {
+    } else if( Utility::isLinux() || Utility::isBSD() ) {
         QString runtimeDir;
 #if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
         runtimeDir = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
@@ -350,11 +350,7 @@ void SocketApi::broadcastMessage( const QString& verb, const QString& path, cons
     if( !path.isEmpty() ) {
         msg.append(QLatin1Char(':'));
         QFileInfo fi(path);
-        auto canon = fi.canonicalFilePath();
-        if (canon.isEmpty()) { // just in case the file do not exist
-            fi = fi.absoluteFilePath();
-        }
-        msg.append(QDir::toNativeSeparators(canon));
+        msg.append(QDir::toNativeSeparators(fi.absoluteFilePath()));
     }
 
     // sendMessage already has a debug output
@@ -400,6 +396,28 @@ void SocketApi::command_RETRIEVE_FILE_STATUS(const QString& argument, SocketType
     QString message = QLatin1String("STATUS:")+statusString+QLatin1Char(':')
             +QDir::toNativeSeparators(argument);
     sendMessage(socket, message);
+}
+
+void SocketApi::command_SHARE(const QString& argument, SocketType* socket)
+{
+    if (!socket) {
+        qDebug() << Q_FUNC_INFO << "No valid socket object.";
+        return;
+    }
+
+    qDebug() << Q_FUNC_INFO << argument;
+
+    Folder *shareFolder = FolderMan::instance()->folderForPath(argument);
+    if (!shareFolder) {
+        const QString message = QLatin1String("SHARE:NOP:")+QDir::toNativeSeparators(argument);
+        sendMessage(socket, message);
+    } else {
+        const QString message = QLatin1String("SHARE:OK:")+QDir::toNativeSeparators(argument);
+        sendMessage(socket, message);
+        const QString folderForPath = shareFolder->path();
+        const QString path = shareFolder->remotePath() + argument.right(argument.count()-folderForPath.count()+1);
+        emit shareCommandReceived(path);
+    }
 }
 
 void SocketApi::command_VERSION(const QString&, SocketType* socket)

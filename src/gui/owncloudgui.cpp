@@ -19,6 +19,7 @@
 #include "utility.h"
 #include "progressdispatcher.h"
 #include "owncloudsetupwizard.h"
+#include "sharedialog.h"
 #if defined(Q_OS_MAC)
 #    include "settingsdialogmac.h"
 #    include "macwindow.h" // qtmacgoodies
@@ -28,6 +29,7 @@
 #include "logger.h"
 #include "logbrowser.h"
 #include "account.h"
+#include "accountstate.h"
 #include "openfilemanager.h"
 #include "creds/abstractcredentials.h"
 
@@ -213,13 +215,13 @@ void ownCloudGui::setConnectionErrors( bool /*connected*/, const QStringList& fa
 
 void ownCloudGui::slotComputeOverallSyncStatus()
 {
-    if (Account *a = AccountManager::instance()->account()) {
-        if (a->state() == Account::SignedOut) {
+    if (AccountState *a = AccountStateManager::instance()->accountState()) {
+        if (a->isSignedOut()) {
             _tray->setIcon(Theme::instance()->folderOfflineIcon(true));
             _tray->setToolTip(tr("Please sign in"));
             return;
         }
-        if (a->state() == Account::Disconnected) {
+        if (!a->isConnected()) {
             _tray->setIcon(Theme::instance()->folderOfflineIcon(true));
             _tray->setToolTip(tr("Disconnected from server"));
             return;
@@ -278,13 +280,13 @@ void ownCloudGui::setupContextMenu()
 {
     FolderMan *folderMan = FolderMan::instance();
 
-    Account *a = AccountManager::instance()->account();
+    AccountState *a = AccountStateManager::instance()->accountState();
 
     bool isConfigured = (a != 0);
     _actionOpenoC->setEnabled(isConfigured);
     bool isConnected = false;
     if (isConfigured) {
-        isConnected = (a->state() == Account::Connected);
+        isConnected = a->isConnected();
     }
 
     if ( _contextMenu ) {
@@ -391,7 +393,7 @@ void ownCloudGui::slotFolderOpenAction( const QString& alias )
         QString filePath = f->path();
 
         if (filePath.startsWith(QLatin1String("\\\\")) || filePath.startsWith(QLatin1String("//")))
-            url.setUrl(QDir::toNativeSeparators(filePath));
+            url = QUrl::fromLocalFile(QDir::toNativeSeparators(filePath));
         else
             url = QUrl::fromLocalFile(filePath);
 #endif
@@ -465,27 +467,28 @@ void ownCloudGui::slotUpdateProgress(const QString &folder, const Progress::Info
 {
     Q_UNUSED(folder);
 
-     if (!progress._currentDiscoveredFolder.isEmpty()) {
-                 _actionStatus->setText( tr("Discovering '%1'")
-                     .arg( progress._currentDiscoveredFolder ));
-     } else if (progress._totalSize == 0 ) {
-            quint64 currentFile =  progress._completedFileCount + progress._currentItems.count();           
-            _actionStatus->setText( tr("Syncing %1 of %2  (%3 left)")
-                .arg( currentFile ).arg( progress._totalFileCount )
-                 .arg( Utility::timeToDescriptiveString(progress.totalEstimate().getEtaEstimate(), 2, " ",true) ) );
-        } else {
-         QString totalSizeStr = Utility::octetsToString( progress._totalSize );
-            _actionStatus->setText( tr("Syncing %1 (%2 left)")
-                .arg( totalSizeStr )
-                .arg( Utility::timeToDescriptiveString(progress.totalEstimate().getEtaEstimate(), 2, " ",true) ) );
-        }
+    if (!progress._currentDiscoveredFolder.isEmpty()) {
+        _actionStatus->setText( tr("Discovering '%1'")
+                                .arg( progress._currentDiscoveredFolder ));
+    } else if (progress._totalSize == 0 ) {
+        quint64 currentFile =  progress._completedFileCount + progress._currentItems.count();
+        quint64 totalFileCount = qMax(progress._totalFileCount, currentFile);
+        _actionStatus->setText( tr("Syncing %1 of %2  (%3 left)")
+            .arg( currentFile ).arg( totalFileCount )
+            .arg( Utility::timeToDescriptiveString(progress.totalEstimate().getEtaEstimate(), 2, " ",true) ) );
+    } else {
+        QString totalSizeStr = Utility::octetsToString( progress._totalSize );
+        _actionStatus->setText( tr("Syncing %1 (%2 left)")
+            .arg( totalSizeStr )
+            .arg( Utility::timeToDescriptiveString(progress.totalEstimate().getEtaEstimate(), 2, " ",true) ) );
+    }
 
 
 
 
     _actionRecent->setIcon( QIcon() ); // Fixme: Set a "in-progress"-item eventually.
 
-    if (!progress._lastCompletedItem.isEmpty()) {
+    if (!progress._lastCompletedItem.isEmpty() && !Progress::isIgnoredKind(progress._lastCompletedItem._status)) {
 
         if (Progress::isWarningKind(progress._lastCompletedItem._status)) {
             // display a warn icon if warnings happend.
@@ -515,7 +518,8 @@ void ownCloudGui::slotUpdateProgress(const QString &folder, const Progress::Info
         slotRebuildRecentMenus();
     }
 
-    if (progress._completedFileCount == progress._totalFileCount
+    if (progress._completedFileCount != ULLONG_MAX
+            && progress._completedFileCount >= progress._totalFileCount
             && progress._currentDiscoveredFolder.isEmpty()) {
         QTimer::singleShot(2000, this, SLOT(slotDisplayIdle()));
     }
@@ -584,7 +588,7 @@ void ownCloudGui::slotToggleLogBrowser()
 
 void ownCloudGui::slotOpenOwnCloud()
 {
-    if (Account *account = AccountManager::instance()->account()) {
+    if (AccountPtr account = AccountManager::instance()->account()) {
         QDesktopServices::openUrl(account->url());
     }
 }
@@ -629,6 +633,16 @@ void ownCloudGui::raiseDialog( QWidget *raiseWidget )
                    &e);
 #endif
     }
+}
+
+
+void ownCloudGui::slotShowShareDialog(const QString &path)
+{
+    qDebug() << Q_FUNC_INFO << "Opening share dialog";
+    ShareDialog *w = new ShareDialog;
+    w->setAttribute( Qt::WA_DeleteOnClose, true );
+    w->setPath(path);
+    w->show();
 }
 
 

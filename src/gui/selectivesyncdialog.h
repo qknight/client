@@ -15,23 +15,25 @@
 #pragma once
 #include <QDialog>
 #include <QTreeWidget>
+#include "accountfwd.h"
 
 class QTreeWidgetItem;
 class QTreeWidget;
 class QLabel;
 namespace OCC {
 
-class Account;
-
 class Folder;
 
 class SelectiveSyncTreeView : public QTreeWidget {
     Q_OBJECT
 public:
-    explicit SelectiveSyncTreeView(Account *account, QWidget* parent = 0);
+    explicit SelectiveSyncTreeView(AccountPtr account, QWidget* parent = 0);
 
     /// Returns a list of blacklisted paths, each including the trailing /
     QStringList createBlackList(QTreeWidgetItem* root = 0) const;
+
+    //Estimate the total size of checked item (recursively)
+    qint64 estimatedSize(QTreeWidgetItem *root = 0);
     void refreshFolders();
 
     // oldBlackList is a list of excluded paths, each including a trailing /
@@ -47,12 +49,12 @@ private slots:
     void slotItemExpanded(QTreeWidgetItem *);
     void slotItemChanged(QTreeWidgetItem*,int);
 private:
-    void recursiveInsert(QTreeWidgetItem* parent, QStringList pathTrail, QString path);
+    void recursiveInsert(QTreeWidgetItem* parent, QStringList pathTrail, QString path, qint64 size);
     QString _folderPath;
     QString _rootName;
     QStringList _oldBlackList;
     bool _inserting; // set to true when we are inserting new items on the list
-    Account *_account;
+    AccountPtr _account;
     QLabel *_loading;
 };
 
@@ -60,18 +62,21 @@ class SelectiveSyncDialog : public QDialog {
     Q_OBJECT
 public:
     // Dialog for a specific folder (used from the account settings button)
-    explicit SelectiveSyncDialog(Account *account, Folder *folder, QWidget* parent = 0, Qt::WindowFlags f = 0);
+    explicit SelectiveSyncDialog(AccountPtr account, Folder *folder, QWidget* parent = 0, Qt::WindowFlags f = 0);
 
     // Dialog for the whole account (Used from the wizard)
-    explicit SelectiveSyncDialog(Account *account, const QStringList &blacklist, QWidget* parent = 0, Qt::WindowFlags f = 0);
+    explicit SelectiveSyncDialog(AccountPtr account, const QStringList &blacklist, QWidget* parent = 0, Qt::WindowFlags f = 0);
 
     virtual void accept() Q_DECL_OVERRIDE;
 
     QStringList createBlackList() const;
 
+    // Estimate the size of the total of sync'ed files from the server
+    qint64 estimatedSize();
+
 private:
 
-    void init(Account *account);
+    void init(AccountPtr account);
 
     SelectiveSyncTreeView *_treeView;
 

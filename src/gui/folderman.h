@@ -37,6 +37,7 @@ class FolderMan : public QObject
 {
     Q_OBJECT
 public:
+    ~FolderMan();
     static FolderMan* instance();
 
     int setupFolders();
@@ -49,9 +50,13 @@ public:
       * QString alias
       * QString sourceFolder on local machine
       * QString targetPath on remote
+      *
+      * Ensures any existing journal in the sourceFolder is deleted.
+      * Returns true on success.
       */
-    void addFolderDefinition(const QString&, const QString&, const QString& ,
-                             const QStringList &selectiveSyncBlacklist = QStringList() );
+    bool addFolderDefinition(const QString& alias, const QString& sourceFolder,
+                             const QString& targetPath,
+                             const QStringList& selectiveSyncBlacklist = QStringList());
 
     /** Returns the folder which the file or directory stored in path is in */
     Folder* folderForPath(const QString& path);
@@ -88,6 +93,8 @@ public:
     // Escaping of the alias which is used in QSettings AND the file
     // system, thus need to be escaped.
     static QString escapeAlias( const QString& );
+
+    SocketApi *socketApi();
 
 signals:
     /**
@@ -140,6 +147,7 @@ private slots:
     // slot to take the next folder from queue and start syncing.
     void slotStartScheduledFolderSync();
     void slotEtagPollTimerTimeout();
+    void slotRemoveFoldersForAccount(AccountState* accountState);
 
 private:
     // finds all folder configuration files
@@ -168,7 +176,6 @@ private:
 
     static FolderMan *_instance;
     explicit FolderMan(QObject *parent = 0);
-    ~FolderMan();
     friend class OCC::Application;
 };
 

@@ -36,7 +36,7 @@ public:
   virtual int nextId() const Q_DECL_OVERRIDE;
   bool validatePage() Q_DECL_OVERRIDE;
   QString localFolder() const;
-  QStringList blacklist() const;
+  QStringList selectiveSyncBlacklist() const;
   void setRemoteFolder( const QString& remoteFolder);
   void setMultipleFoldersExist( bool exist );
   void directoriesCreated();
@@ -52,6 +52,7 @@ private slots:
   void slotSelectFolder();
   void slotSyncEverythingClicked();
   void slotSelectiveSyncClicked();
+    void slotQuotaRetrieved(qint64,qint64);
 
 private:
   void setupCustomization();
@@ -68,7 +69,7 @@ private:
   QProgressIndicator* _progressIndi;
   QString _oldLocalFolder;
   QString _remoteFolder;
-  QStringList _blacklist;
+  QStringList _selectiveSyncBlacklist;
 };
 
 } // namespace OCC

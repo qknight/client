@@ -30,7 +30,7 @@
 namespace OCC {
 
 // DOES NOT take owncership of the device.
-GETFileJob::GETFileJob(Account* account, const QString& path, QFile *device,
+GETFileJob::GETFileJob(AccountPtr account, const QString& path, QFile *device,
                     const QMap<QByteArray, QByteArray> &headers, const QByteArray &expectedEtagForResume,
                     quint64 resumeStart,  QObject* parent)
 : AbstractNetworkJob(account, path, parent),
@@ -41,9 +41,10 @@ GETFileJob::GETFileJob(Account* account, const QString& path, QFile *device,
 {
 }
 
-GETFileJob::GETFileJob(Account* account, const QUrl& url, QFile *device,
-                       const QMap<QByteArray, QByteArray> &headers, const QByteArray &expectedEtagForResume,
+GETFileJob::GETFileJob(AccountPtr account, const QUrl& url, QFile *device,
+                    const QMap<QByteArray, QByteArray> &headers, const QByteArray &expectedEtagForResume,
                        quint64 resumeStart, QObject* parent)
+
 : AbstractNetworkJob(account, url.toEncoded(), parent),
   _device(device), _headers(headers), _expectedEtagForResume(expectedEtagForResume)
 , _resumeStart(resumeStart), _errorStatus(SyncFileItem::NoStatus), _directDownloadUrl(url)
@@ -87,7 +88,7 @@ void GETFileJob::start() {
     connect(reply(), SIGNAL(metaDataChanged()), this, SLOT(slotMetaDataChanged()));
     connect(reply(), SIGNAL(readyRead()), this, SLOT(slotReadyRead()));
     connect(reply(), SIGNAL(downloadProgress(qint64,qint64)), this, SIGNAL(downloadProgress(qint64,qint64)));
-    connect(this, SIGNAL(networkActivity()), account(), SIGNAL(propagatorNetworkActivity()));
+    connect(this, SIGNAL(networkActivity()), account().data(), SIGNAL(propagatorNetworkActivity()));
 
     AbstractNetworkJob::start();
 }
@@ -141,7 +142,7 @@ void GETFileJob::slotMetaDataChanged()
     }
     if (start != _resumeStart) {
         qDebug() << Q_FUNC_INFO <<  "Wrong content-range: "<< ranges << " while expecting start was" << _resumeStart;
-        if (start == 0) {
+        if (ranges.isEmpty()) {
             // device don't support range, just stry again from scratch
             _device->close();
             if (!_device->open(QIODevice::WriteOnly)) {
@@ -329,7 +330,7 @@ void PropagateDownloadFileQNAM::start()
 
     if (_item._directDownloadUrl.isEmpty()) {
         // Normal job, download from oC instance
-        _job = new GETFileJob(AccountManager::instance()->account(),
+        _job = new GETFileJob(_propagator->account(),
                             _propagator->_remoteFolder + _item._file,
                             &_tmpFile, headers, expectedEtagForResume, startSize);
     } else {
@@ -341,7 +342,7 @@ void PropagateDownloadFileQNAM::start()
         }
 
         QUrl url = QUrl::fromUserInput(_item._directDownloadUrl);
-        _job = new GETFileJob(AccountManager::instance()->account(),
+        _job = new GETFileJob(_propagator->account(),
                               url,
                               &_tmpFile, headers, expectedEtagForResume, startSize);
     }
@@ -475,7 +476,7 @@ void PropagateDownloadFileQNAM::downloadFinished()
         QString conflictFileName = makeConflictFileName(fn, Utility::qDateTimeFromTime_t(_item._modtime));
         if (!f.rename(conflictFileName)) {
             //If the rename fails, don't replace it.
-            done(SyncFileItem::NormalError, f.errorString());
+            done(SyncFileItem::SoftError, f.errorString());
             return;
         }
     }
@@ -490,6 +491,7 @@ void PropagateDownloadFileQNAM::downloadFinished()
     QString error;
     _propagator->addTouchedFile(fn);
     if (!FileSystem::renameReplace(_tmpFile.fileName(), fn, &error)) {
+        qDebug() << Q_FUNC_INFO << QString("Rename failed: %1 => %2").arg(_tmpFile.fileName()).arg(fn);
         // If we moved away the original file due to a conflict but can't
         // put the downloaded file in its place, we are in a bad spot:
         // If we do nothing the next sync run will assume the user deleted
@@ -500,10 +502,9 @@ void PropagateDownloadFileQNAM::downloadFinished()
         if (isConflict) {
             _propagator->_journal->deleteFileRecord(fn);
             _propagator->_journal->commit("download finished");
-            _propagator->_anotherSyncNeeded = true;
         }
-
-        done(SyncFileItem::NormalError, error);
+        _propagator->_anotherSyncNeeded = true;
+        done(SyncFileItem::SoftError, error);
         return;
     }
 

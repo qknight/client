@@ -27,6 +27,7 @@
 #include <QFileInfo>
 #include <QDir>
 #include <cmath>
+#include <cstring>
 
 namespace OCC {
 
@@ -47,7 +48,7 @@ static qint64 chunkSize() {
     if (!chunkSize) {
         chunkSize = qgetenv("OWNCLOUD_CHUNK_SIZE").toUInt();
         if (chunkSize == 0) {
-            chunkSize = 20*1024*1024; // default to 20 MiB
+            chunkSize = 5*1024*1024; // default to 5 MiB
         }
     }
     return chunkSize;
@@ -67,7 +68,7 @@ void PUTFileJob::start() {
     }
 
     connect(reply(), SIGNAL(uploadProgress(qint64,qint64)), this, SIGNAL(uploadProgress(qint64,qint64)));
-    connect(this, SIGNAL(networkActivity()), account(), SIGNAL(propagatorNetworkActivity()));
+    connect(this, SIGNAL(networkActivity()), account().data(), SIGNAL(propagatorNetworkActivity()));
 
     AbstractNetworkJob::start();
 }
@@ -151,17 +152,15 @@ void PropagateUploadFileQNAM::start()
     if (_propagator->_abortRequested.fetchAndAddRelaxed(0))
         return;
 
-    _file = new QFile(_propagator->getFilePath(_item._file), this);
-    if (!_file->open(QIODevice::ReadOnly)) {
-        // Soft error because this is likely caused by the user modifying his files while syncing
-        done(SyncFileItem::SoftError, _file->errorString());
-        delete _file;
+    QFileInfo fi(_propagator->getFilePath(_item._file));
+    if (!fi.exists()) {
+        done(SyncFileItem::SoftError, tr("File Removed"));
         return;
     }
 
     // Update the mtime and size, it might have changed since discovery.
-    _item._modtime = FileSystem::getModTime(_file->fileName());
-    quint64 fileSize = _file->size();
+    _item._modtime = FileSystem::getModTime(fi.absoluteFilePath());
+    quint64 fileSize = fi.size();
     _item._size = fileSize;
 
     // But skip the file if the mtime is too close to 'now'!
@@ -171,7 +170,6 @@ void PropagateUploadFileQNAM::start()
     if (modtime.msecsTo(QDateTime::currentDateTime()) < minFileAgeForUpload) {
         _propagator->_anotherSyncNeeded = true;
         done(SyncFileItem::SoftError, tr("Local file changed during sync."));
-        delete _file;
         return;
     }
 
@@ -194,21 +192,50 @@ void PropagateUploadFileQNAM::start()
     this->startNextChunk();
 }
 
-UploadDevice::UploadDevice(QIODevice *file,  qint64 start, qint64 size, BandwidthManager *bwm)
-    : QIODevice(file), _file(file), _read(0), _size(size), _start(start),
+UploadDevice::UploadDevice(BandwidthManager *bwm)
+    : _read(0),
       _bandwidthManager(bwm),
       _bandwidthQuota(0),
       _readWithProgress(0),
       _bandwidthLimited(false), _choked(false)
 {
     _bandwidthManager->registerUploadDevice(this);
-    _file = QPointer<QIODevice>(file);
 }
 
 
 UploadDevice::~UploadDevice() {
-    _bandwidthManager->unregisterUploadDevice(this);
+    if (_bandwidthManager) {
+        _bandwidthManager->unregisterUploadDevice(this);
+    }
 }
+
+bool UploadDevice::prepareAndOpen(const QString& fileName, qint64 start, qint64 size)
+{
+    _data.clear();
+    _read = 0;
+
+    QFile file(fileName);
+    QString openError;
+    if (!FileSystem::openFileSharedRead(&file, &openError)) {
+        setErrorString(openError);
+        return false;
+    }
+
+    size = qMin(file.size(), size);
+    _data.resize(size);
+    if (!file.seek(start)) {
+        setErrorString(file.errorString());
+        return false;
+    }
+    auto read = file.read(_data.data(), size);
+    if (read != size) {
+        setErrorString(file.errorString());
+        return false;
+    }
+
+    return QIODevice::open(QIODevice::ReadOnly);
+}
+
 
 qint64 UploadDevice::writeData(const char* , qint64 ) {
     Q_ASSERT(!"write to read only device");
@@ -216,19 +243,13 @@ qint64 UploadDevice::writeData(const char* , qint64 ) {
 }
 
 qint64 UploadDevice::readData(char* data, qint64 maxlen) {
-    if (_file.isNull()) {
-        qDebug() << "Upload file object deleted during upload";
-        close();
-        return -1;
-    }
-    _file.data()->seek(_start + _read);
     //qDebug() << Q_FUNC_INFO << maxlen << _read << _size << _bandwidthQuota;
-    if (_size - _read <= 0) {
+    if (_data.size() - _read <= 0) {
         // at end
         _bandwidthManager->unregisterUploadDevice(this);
         return -1;
     }
-    maxlen = qMin(maxlen, _size - _read);
+    maxlen = qMin(maxlen, _data.size() - _read);
     if (maxlen == 0) {
         return 0;
     }
@@ -243,13 +264,9 @@ qint64 UploadDevice::readData(char* data, qint64 maxlen) {
         }
         _bandwidthQuota -= maxlen;
     }
-    qint64 ret = _file.data()->read(data, maxlen);
-
-    if (ret < 0)
-        return -1;
-    _read += ret;
-
-    return ret;
+    std::memcpy(data, _data.data()+_read, maxlen);
+    _read += maxlen;
+    return maxlen;
 }
 
 void UploadDevice::slotJobUploadProgress(qint64 sent, qint64 t)
@@ -262,26 +279,19 @@ void UploadDevice::slotJobUploadProgress(qint64 sent, qint64 t)
 }
 
 bool UploadDevice::atEnd() const {
-    if (_file.isNull()) {
-        qDebug() << "Upload file object deleted during upload";
-        return true;
-    }
-//    qDebug() << this << Q_FUNC_INFO << _read << chunkSize()
-//             << (_read >= chunkSize() || _file.data()->atEnd())
-//             << (_read >= _size);
-    return  _file.data()->atEnd() || (_read >= _size);
+    return _read >= _data.size();
 }
 
 qint64 UploadDevice::size() const{
 //    qDebug() << this << Q_FUNC_INFO << _size;
-    return _size;
+    return _data.size();
 }
 
 qint64 UploadDevice::bytesAvailable() const
 {
 //    qDebug() << this << Q_FUNC_INFO << _size << _read << QIODevice::bytesAvailable()
 //             <<   _size - _read + QIODevice::bytesAvailable();
-    return _size - _read + QIODevice::bytesAvailable();
+    return _data.size() - _read + QIODevice::bytesAvailable();
 }
 
 // random access, we can seek
@@ -290,13 +300,14 @@ bool UploadDevice::isSequential() const{
 }
 
 bool UploadDevice::seek ( qint64 pos ) {
-    if (_file.isNull()) {
-        qDebug() << "Upload file object deleted during upload";
-        close();
+    if (! QIODevice::seek(pos)) {
+        return false;
+    }
+    if (pos < 0 || pos > _data.size()) {
         return false;
     }
     _read = pos;
-    return _file.data()->seek(pos + _start);
+    return true;
 }
 
 void UploadDevice::giveBandwidthQuota(qint64 bwq) {
@@ -345,61 +356,60 @@ void PropagateUploadFileQNAM::startNextChunk()
     }
 
     QString path = _item._file;
-    UploadDevice *device = 0;
+
+    UploadDevice *device = new UploadDevice(&_propagator->_bandwidthManager);
+    qint64 chunkStart = 0;
+    qint64 currentChunkSize = fileSize;
     if (_chunkCount > 1) {
         int sendingChunk = (_currentChunk + _startChunk) % _chunkCount;
         // XOR with chunk size to make sure everything goes well if chunk size change between runs
         uint transid = _transferId ^ chunkSize();
         path +=  QString("-chunking-%1-%2-%3").arg(transid).arg(_chunkCount).arg(sendingChunk);
+
         headers["OC-Chunked"] = "1";
-        int currentChunkSize = chunkSize();
+
+        chunkStart = chunkSize() * quint64(sendingChunk);
+        currentChunkSize = chunkSize();
         if (sendingChunk == _chunkCount - 1) { // last chunk
             currentChunkSize = (fileSize % chunkSize());
             if( currentChunkSize == 0 ) { // if the last chunk pretents to be 0, its actually the full chunk size.
                 currentChunkSize = chunkSize();
             }
         }
-        device = new UploadDevice(_file, chunkSize() * quint64(sendingChunk), currentChunkSize, &_propagator->_bandwidthManager);
-    } else {
-        device = new UploadDevice(_file, 0, fileSize, &_propagator->_bandwidthManager);
     }
 
-    bool isOpen = true;
-    if (!device->isOpen()) {
-        isOpen = device->open(QIODevice::ReadOnly);
-    }
-
-    if( isOpen ) {
-        PUTFileJob* job = new PUTFileJob(AccountManager::instance()->account(), _propagator->_remoteFolder + path, device, headers, _currentChunk);
-        _jobs.append(job);
-        connect(job, SIGNAL(finishedSignal()), this, SLOT(slotPutFinished()));
-        connect(job, SIGNAL(uploadProgress(qint64,qint64)), this, SLOT(slotUploadProgress(qint64,qint64)));
-        connect(job, SIGNAL(uploadProgress(qint64,qint64)), device, SLOT(slotJobUploadProgress(qint64,qint64)));
-        connect(job, SIGNAL(destroyed(QObject*)), this, SLOT(slotJobDestroyed(QObject*)));
-        job->start();
-        _propagator->_activeJobs++;
-        _currentChunk++;
-
-        QByteArray env = qgetenv("OWNCLOUD_PARALLEL_CHUNK");
-        bool parallelChunkUpload = env=="true" || env =="1";;
-        if (_currentChunk + _startChunk >= _chunkCount - 1) {
-            // Don't do parallel upload of chunk if this might be the last chunk because the server cannot handle that
-            // https://github.com/owncloud/core/issues/11106
-            parallelChunkUpload = false;
-        }
-
-        if (parallelChunkUpload && (_propagator->_activeJobs < _propagator->maximumActiveJob())
-                && _currentChunk < _chunkCount ) {
-            startNextChunk();
-        }
-        if (!parallelChunkUpload || _chunkCount - _currentChunk <= 0) {
-            emit ready();
-        }
-    } else {
-        qDebug() << "ERR: Could not open upload file: " << device->errorString();
-        done( SyncFileItem::NormalError, device->errorString() );
+    if (! device->prepareAndOpen(_propagator->getFilePath(_item._file), chunkStart, currentChunkSize)) {
+        qDebug() << "ERR: Could not prepare upload device: " << device->errorString();
+        // Soft error because this is likely caused by the user modifying his files while syncing
+        abortWithError( SyncFileItem::SoftError, device->errorString() );
         delete device;
         return;
+    }
+
+    PUTFileJob* job = new PUTFileJob(_propagator->account(), _propagator->_remoteFolder + path, device, headers, _currentChunk);
+    _jobs.append(job);
+    connect(job, SIGNAL(finishedSignal()), this, SLOT(slotPutFinished()));
+    connect(job, SIGNAL(uploadProgress(qint64,qint64)), this, SLOT(slotUploadProgress(qint64,qint64)));
+    connect(job, SIGNAL(uploadProgress(qint64,qint64)), device, SLOT(slotJobUploadProgress(qint64,qint64)));
+    connect(job, SIGNAL(destroyed(QObject*)), this, SLOT(slotJobDestroyed(QObject*)));
+    job->start();
+    _propagator->_activeJobs++;
+    _currentChunk++;
+
+    QByteArray env = qgetenv("OWNCLOUD_PARALLEL_CHUNK");
+    bool parallelChunkUpload = env!="false" && env != "0";
+    if (_currentChunk + _startChunk >= _chunkCount - 1) {
+        // Don't do parallel upload of chunk if this might be the last chunk because the server cannot handle that
+        // https://github.com/owncloud/core/issues/11106
+        parallelChunkUpload = false;
+    }
+
+    if (parallelChunkUpload && (_propagator->_activeJobs < _propagator->maximumActiveJob())
+            && _currentChunk < _chunkCount ) {
+        startNextChunk();
+    }
+    if (!parallelChunkUpload || _chunkCount - _currentChunk <= 0) {
+        emit ready();
     }
 }
 
@@ -446,14 +456,7 @@ void PropagateUploadFileQNAM::slotPutFinished()
             _propagator->_anotherSyncNeeded = true;
         }
 
-        foreach (auto job, _jobs) {
-            if (job->reply()) {
-                job->reply()->abort();
-            }
-        }
-
-        _finished = true;
-        done(classifyError(err, _item._httpErrorCode), errorString);
+        abortWithError(classifyError(err, _item._httpErrorCode), errorString);
         return;
     }
 
@@ -463,7 +466,6 @@ void PropagateUploadFileQNAM::slotPutFinished()
         _finished = true;
         QString path =  QString::fromUtf8(job->reply()->rawHeader("OC-Finish-Poll"));
         if (path.isEmpty()) {
-            _finished = true;
             done(SyncFileItem::NormalError, tr("Poll URL missing"));
             return;
         }
@@ -489,8 +491,7 @@ void PropagateUploadFileQNAM::slotPutFinished()
     // Check if the file still exists
     if( !fi.exists() ) {
         if (!finished) {
-            _finished = true;
-            done(SyncFileItem::SoftError, tr("The local file was removed during sync."));
+            abortWithError(SyncFileItem::SoftError, tr("The local file was removed during sync."));
             return;
         } else {
             _propagator->_anotherSyncNeeded = true;
@@ -507,8 +508,7 @@ void PropagateUploadFileQNAM::slotPutFinished()
                  << ", QFileInfo: " << Utility::qDateTimeToTime_t(fi.lastModified()) << fi.lastModified();
         _propagator->_anotherSyncNeeded = true;
         if( !finished ) {
-            _finished = true;
-            done(SyncFileItem::SoftError, tr("Local file changed during sync."));
+            abortWithError(SyncFileItem::SoftError, tr("Local file changed during sync."));
             // FIXME:  the legacy code was retrying for a few seconds.
             //         and also checking that after the last chunk, and removed the file in case of INSTRUCTION_NEW
             return;
@@ -597,19 +597,19 @@ void PropagateUploadFileQNAM::slotUploadProgress(qint64 sent, qint64)
     quint64 amount = progressChunk * chunkSize();
     sender()->setProperty("byteWritten", sent);
     if (_jobs.count() > 1) {
-        amount += sent;
-    } else {
         amount -= (_jobs.count() -1) * chunkSize();
         foreach (QObject *j, _jobs) {
             amount += j->property("byteWritten").toULongLong();
         }
+    } else {
+        amount += sent;
     }
     emit progress(_item, amount);
 }
 
 void PropagateUploadFileQNAM::startPollJob(const QString& path)
 {
-    PollJob* job = new PollJob(AccountManager::instance()->account(), path, _item,
+    PollJob* job = new PollJob(_propagator->account(), path, _item,
                                _propagator->_journal, _propagator->_localDir, this);
     connect(job, SIGNAL(finishedSignal()), SLOT(slotPollFinished()));
     SyncJournalDb::PollInfo info;
@@ -652,5 +652,14 @@ void PropagateUploadFileQNAM::abort()
         }
     }
 }
+
+// This function is used whenever there is an error occuring and jobs might be in progress
+void PropagateUploadFileQNAM::abortWithError(SyncFileItem::Status status, const QString &error)
+{
+    _finished = true;
+    abort();
+    done(status, error);
+}
+
 
 }

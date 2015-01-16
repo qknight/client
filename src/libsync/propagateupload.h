@@ -26,24 +26,19 @@ class BandwidthManager;
 class UploadDevice : public QIODevice {
     Q_OBJECT
 public:
-    QPointer<QIODevice> _file;
-    qint64 _read;
-    qint64 _size;
-    qint64 _start;
-    BandwidthManager* _bandwidthManager;
-
-    qint64 _bandwidthQuota;
-    qint64 _readWithProgress;
-
-    UploadDevice(QIODevice *file,  qint64 start, qint64 size, BandwidthManager *bwm);
+    UploadDevice(BandwidthManager *bwm);
     ~UploadDevice();
-    virtual qint64 writeData(const char* , qint64 );
-    virtual qint64 readData(char* data, qint64 maxlen);
-    virtual bool atEnd() const;
-    virtual qint64 size() const;
-    qint64 bytesAvailable() const;
-    virtual bool isSequential() const;
-    virtual bool seek ( qint64 pos );
+
+    /** Reads the data from the file and opens the device */
+    bool prepareAndOpen(const QString& fileName, qint64 start, qint64 size);
+
+    qint64 writeData(const char* , qint64 ) Q_DECL_OVERRIDE;
+    qint64 readData(char* data, qint64 maxlen) Q_DECL_OVERRIDE;
+    bool atEnd() const Q_DECL_OVERRIDE;
+    qint64 size() const Q_DECL_OVERRIDE;
+    qint64 bytesAvailable() const Q_DECL_OVERRIDE;
+    bool isSequential() const Q_DECL_OVERRIDE;
+    bool seek ( qint64 pos ) Q_DECL_OVERRIDE;
 
     void setBandwidthLimited(bool);
     bool isBandwidthLimited() { return _bandwidthLimited; }
@@ -51,21 +46,32 @@ public:
     bool isChoked() { return _choked; }
     void giveBandwidthQuota(qint64 bwq);
 private:
+
+    // The file data
+    QByteArray _data;
+    // Position in the data
+    qint64 _read;
+
+    // Bandwidth manager related
+    QPointer<BandwidthManager> _bandwidthManager;
+    qint64 _bandwidthQuota;
+    qint64 _readWithProgress;
     bool _bandwidthLimited; // if _bandwidthQuota will be used
     bool _choked; // if upload is paused (readData() will return 0)
+    friend class BandwidthManager;
 protected slots:
     void slotJobUploadProgress(qint64 sent, qint64 t);
 };
 
 class PUTFileJob : public AbstractNetworkJob {
     Q_OBJECT
-    QSharedPointer<QIODevice> _device;
+    QScopedPointer<QIODevice> _device;
     QMap<QByteArray, QByteArray> _headers;
     QString _errorString;
 
 public:
     // Takes ownership of the device
-    explicit PUTFileJob(Account* account, const QString& path, QIODevice *device,
+    explicit PUTFileJob(AccountPtr account, const QString& path, QIODevice *device,
                         const QMap<QByteArray, QByteArray> &headers, int chunk, QObject* parent = 0)
         : AbstractNetworkJob(account, path, parent), _device(device), _headers(headers), _chunk(chunk) {}
 
@@ -97,7 +103,7 @@ class PollJob : public AbstractNetworkJob {
 public:
     SyncFileItem _item;
     // Takes ownership of the device
-    explicit PollJob(Account* account, const QString &path, const SyncFileItem &item,
+    explicit PollJob(AccountPtr account, const QString &path, const SyncFileItem &item,
                      SyncJournalDb *journal, const QString &localPath, QObject *parent)
         : AbstractNetworkJob(account, path, parent), _journal(journal), _localPath(localPath), _item(item) {}
 
@@ -117,14 +123,13 @@ signals:
 
 class PropagateUploadFileQNAM : public PropagateItemJob {
     Q_OBJECT
-    QFile *_file;
     int _startChunk;
     int _currentChunk;
     int _chunkCount;
     int _transferId;
     QElapsedTimer _duration;
     QVector<PUTFileJob*> _jobs;
-    bool _finished;
+    bool _finished; // Tells that all the jobs have been finished
 public:
     PropagateUploadFileQNAM(OwncloudPropagator* propagator,const SyncFileItem& item)
         : PropagateItemJob(propagator, item), _startChunk(0), _currentChunk(0), _chunkCount(0), _transferId(0), _finished(false) {}
@@ -139,6 +144,7 @@ private slots:
     void slotJobDestroyed(QObject *job);
 private:
     void startPollJob(const QString& path);
+    void abortWithError(SyncFileItem::Status status, const QString &error);
 };
 
 }

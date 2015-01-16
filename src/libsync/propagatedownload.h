@@ -34,16 +34,16 @@ class GETFileJob : public AbstractNetworkJob {
     bool _bandwidthLimited; // if _bandwidthQuota will be used
     bool _bandwidthChoked; // if download is paused (won't read on readyRead())
     qint64 _bandwidthQuota;
-    BandwidthManager *_bandwidthManager;
+    QPointer<BandwidthManager> _bandwidthManager;
     bool _hasEmittedFinishedSignal;
 public:
 
     // DOES NOT take owncership of the device.
-    explicit GETFileJob(Account* account, const QString& path, QFile *device,
+    explicit GETFileJob(AccountPtr account, const QString& path, QFile *device,
                         const QMap<QByteArray, QByteArray> &headers, const QByteArray &expectedEtagForResume,
                         quint64 resumeStart, QObject* parent = 0);
     // For directDownloadUrl:
-    explicit GETFileJob(Account* account, const QUrl& url, QFile *device,
+    explicit GETFileJob(AccountPtr account, const QUrl& url, QFile *device,
                         const QMap<QByteArray, QByteArray> &headers, const QByteArray &expectedEtagForResume,
                         quint64 resumeStart, QObject* parent = 0);
     virtual ~GETFileJob() {

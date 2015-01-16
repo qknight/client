@@ -19,10 +19,10 @@
 #include <QWizard>
 
 #include "wizard/owncloudwizardcommon.h"
+#include "accountfwd.h"
 
 namespace OCC {
 
-class Account;
 class OwncloudSetupPage;
 class OwncloudHttpCredsPage;
 class OwncloudShibbolethCredsPage;
@@ -43,18 +43,18 @@ public:
 
     OwncloudWizard(QWidget *parent = 0);
 
-    void setAccount(Account *account);
-    Account* account() const;
+    void setAccount(AccountPtr account);
+    AccountPtr account() const;
     void setOCUrl( const QString& );
 
     void setupCustomMedia( QVariant, QLabel* );
     QString ocUrl() const;
     QString localFolder() const;
-    QStringList blacklist() const;
+    QStringList selectiveSyncBlacklist() const;
 
     void enableFinishOnResultWidget(bool enable);
 
-    void displayError( const QString& );
+    void displayError( const QString&);
     void setMultipleFoldersExist( bool );
     void setConfigExists( bool );
     bool configExists();
@@ -84,7 +84,7 @@ signals:
     void needCertificate();
 
 private:
-    Account* _account;
+    AccountPtr _account;
     OwncloudSetupPage* _setupPage;
     OwncloudHttpCredsPage* _httpCredsPage;
     OwncloudShibbolethCredsPage* _shibbolethCredsPage;

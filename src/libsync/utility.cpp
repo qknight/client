@@ -110,16 +110,16 @@ QString Utility::octetsToString( qint64 octets )
     QString s;
     qreal value = octets;
     if (octets >= tb) {
-        s = QCoreApplication::translate("Utility", "%L1 TB");
+        s = QCoreApplication::translate("Utility", "%L1 TiB");
         value /= tb;
     } else if (octets >= gb) {
-        s = QCoreApplication::translate("Utility", "%L1 GB");
+        s = QCoreApplication::translate("Utility", "%L1 GiB");
         value /= gb;
     } else if (octets >= mb) {
-        s = QCoreApplication::translate("Utility", "%L1 MB");
+        s = QCoreApplication::translate("Utility", "%L1 MiB");
         value /= mb;
     } else if (octets >= kb) {
-        s = QCoreApplication::translate("Utility", "%L1 kB");
+        s = QCoreApplication::translate("Utility", "%L1 KiB");
         value /= kb;
     } else  {
         s = QCoreApplication::translate("Utility", "%L1 B");
@@ -172,7 +172,7 @@ void Utility::setLaunchOnStartup(const QString &appName, const QString& guiName,
 
 qint64 Utility::freeDiskSpace(const QString &path, bool *ok)
 {
-#if defined(Q_OS_MAC) || defined(Q_OS_FREEBSD) || defined(Q_OS_FREEBSD_KERNEL)
+#if defined(Q_OS_MAC) || defined(Q_OS_FREEBSD) || defined(Q_OS_FREEBSD_KERNEL) || defined(Q_OS_NETBSD)
     struct statvfs stat;
     statvfs(path.toUtf8().data(), &stat);
     return (qint64) stat.f_bavail * stat.f_frsize;
@@ -370,12 +370,22 @@ bool Utility::isUnix()
 
 bool Utility::isLinux()
 {
-#ifdef Q_OS_LINUX
+#if defined(Q_OS_LINUX)
     return true;
 #else
     return false;
 #endif
 }
+
+bool Utility::isBSD()
+{
+#if defined(Q_OS_FREEBSD) || defined(Q_OS_NETBSD)
+    return true;
+#else
+    return false;
+#endif
+}
+
 
 void Utility::crash()
 {

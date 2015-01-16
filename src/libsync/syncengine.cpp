@@ -46,13 +46,16 @@
 #include <QSslCertificate>
 #include <QProcess>
 #include <QElapsedTimer>
+#include <qtextcodec.h>
 
 namespace OCC {
 
 bool SyncEngine::_syncRunning = false;
 
-SyncEngine::SyncEngine(CSYNC *ctx, const QString& localPath, const QString& remoteURL, const QString& remotePath, OCC::SyncJournalDb* journal)
-  : _csync_ctx(ctx)
+SyncEngine::SyncEngine(AccountPtr account, CSYNC *ctx, const QString& localPath,
+                       const QString& remoteURL, const QString& remotePath, OCC::SyncJournalDb* journal)
+  : _account(account)
+  , _csync_ctx(ctx)
   , _needsUpdate(false)
   , _localPath(localPath)
   , _remoteUrl(remoteURL)
@@ -88,26 +91,15 @@ QString SyncEngine::csyncErrorToString(CSYNC_STATUS err)
     case CSYNC_STATUS_OK:
         errStr = tr("Success.");
         break;
-    case CSYNC_STATUS_NO_LOCK:
-        errStr = tr("CSync failed to create a lock file.");
-        break;
     case CSYNC_STATUS_STATEDB_LOAD_ERROR:
         errStr = tr("CSync failed to load or create the journal file. "
                     "Make sure you have read and write permissions in the local sync directory.");
         break;
-    case CSYNC_STATUS_STATEDB_WRITE_ERROR:
-        errStr = tr("CSync failed to write the journal file.");
+    case CSYNC_STATUS_STATEDB_CORRUPTED:
+        errStr = tr("CSync failed to load the journal file. The journal file is corrupted.");
         break;
     case CSYNC_STATUS_NO_MODULE:
         errStr = tr("<p>The %1 plugin for csync could not be loaded.<br/>Please verify the installation!</p>").arg(Theme::instance()->appNameGUI());
-        break;
-    case CSYNC_STATUS_TIMESKEW:
-        errStr = tr("The system time on this client is different than the system time on the server. "
-                    "Please use a time synchronization service (NTP) on the server and client machines "
-                    "so that the times remain the same.");
-        break;
-    case CSYNC_STATUS_FILESYSTEM_UNKNOWN:
-        errStr = tr("CSync could not detect the filesystem type.");
         break;
     case CSYNC_STATUS_TREE_ERROR:
         errStr = tr("CSync got an error while processing internal trees.");
@@ -123,23 +115,6 @@ QString SyncEngine::csyncErrorToString(CSYNC_STATUS err)
         break;
     case CSYNC_STATUS_RECONCILE_ERROR:
         errStr = tr("CSync processing step reconcile failed.");
-        break;
-    case CSYNC_STATUS_PROPAGATE_ERROR:
-        errStr = tr("CSync processing step propagate failed.");
-        break;
-    case CSYNC_STATUS_REMOTE_ACCESS_ERROR:
-        errStr = tr("<p>The target directory does not exist.</p><p>Please check the sync setup.</p>");
-        break;
-    case CSYNC_STATUS_REMOTE_CREATE_ERROR:
-    case CSYNC_STATUS_REMOTE_STAT_ERROR:
-        errStr = tr("A remote file can not be written. Please check the remote access.");
-        break;
-    case CSYNC_STATUS_LOCAL_CREATE_ERROR:
-    case CSYNC_STATUS_LOCAL_STAT_ERROR:
-        errStr = tr("The local filesystem can not be written. Please check permissions.");
-        break;
-    case CSYNC_STATUS_PROXY_ERROR:
-        errStr = tr("CSync failed to connect through a proxy.");
         break;
     case CSYNC_STATUS_PROXY_AUTH_ERROR:
         errStr = tr("CSync could not authenticate at the proxy.");
@@ -171,9 +146,6 @@ QString SyncEngine::csyncErrorToString(CSYNC_STATUS err)
     case CSYNC_STATUS_OUT_OF_SPACE:
         errStr = tr("CSync: No space on %1 server available.").arg(Theme::instance()->appNameGUI());
         break;
-    case CSYNC_STATUS_QUOTA_EXCEEDED:
-        errStr = tr("CSync: No space on %1 server available.").arg(Theme::instance()->appNameGUI());
-        break;
     case CSYNC_STATUS_UNSUCCESSFUL:
         errStr = tr("CSync unspecified error.");
         break;
@@ -181,8 +153,8 @@ QString SyncEngine::csyncErrorToString(CSYNC_STATUS err)
         errStr = tr("Aborted by the user");
         break;
     case CSYNC_STATUS_SERVICE_UNAVAILABLE:
-	errStr = tr("The mounted directory is temporarily not available on the server");
-	break;
+        errStr = tr("The mounted directory is temporarily not available on the server");
+        break;
     default:
         errStr = tr("An internal error number %1 happened.").arg( (int) err );
     }
@@ -191,14 +163,14 @@ QString SyncEngine::csyncErrorToString(CSYNC_STATUS err)
 
 }
 
-bool SyncEngine::checkBlacklisting( SyncFileItem *item )
+bool SyncEngine::checkErrorBlacklisting( SyncFileItem *item )
 {
     if( !_journal ) {
         qWarning() << "Journal is undefined!";
         return false;
     }
 
-    SyncJournalBlacklistRecord entry = _journal->blacklistEntry(item->_file);
+    SyncJournalErrorBlacklistRecord entry = _journal->errorBlacklistEntry(item->_file);
     item->_hasBlacklistEntry = false;
 
     if( !entry.isValid() ) {
@@ -282,7 +254,7 @@ void SyncEngine::deleteStaleUploadInfos()
     _journal->deleteStaleUploadInfos(upload_file_paths);
 }
 
-void SyncEngine::deleteStaleBlacklistEntries()
+void SyncEngine::deleteStaleErrorBlacklistEntries()
 {
     // Find all blacklisted paths that we want to preserve.
     QSet<QString> blacklist_file_paths;
@@ -292,7 +264,7 @@ void SyncEngine::deleteStaleBlacklistEntries()
     }
 
     // Delete from journal.
-    _journal->deleteStaleBlacklistEntries(blacklist_file_paths);
+    _journal->deleteStaleErrorBlacklistEntries(blacklist_file_paths);
 }
 
 int SyncEngine::treewalkLocal( TREE_WALK_FILE* file, void *data )
@@ -309,7 +281,16 @@ int SyncEngine::treewalkFile( TREE_WALK_FILE *file, bool remote )
 {
     if( ! file ) return -1;
 
-    QString fileUtf8 = QString::fromUtf8( file->path );
+    QTextCodec::ConverterState utf8State;
+    QTextCodec *codec = QTextCodec::codecForName("UTF-8");
+    Q_ASSERT(codec);
+    QString fileUtf8 = codec->toUnicode(file->path, qstrlen(file->path), &utf8State);
+
+    auto instruction = file->instruction;
+    if (utf8State.invalidChars > 0) {
+        qDebug() << "File ignored because of invalid utf-8 sequence: " << file->path;
+        instruction = CSYNC_INSTRUCTION_IGNORE;
+    }
 
     // Gets a default-contructed SyncFileItem or the one from the first walk (=local walk)
     SyncFileItem item = _syncItemMap.value(fileUtf8);
@@ -317,12 +298,12 @@ int SyncEngine::treewalkFile( TREE_WALK_FILE *file, bool remote )
     item._originalFile = item._file;
 
     if (item._instruction == CSYNC_INSTRUCTION_NONE
-            || (item._instruction == CSYNC_INSTRUCTION_IGNORE && file->instruction != CSYNC_INSTRUCTION_NONE)) {
-        item._instruction = file->instruction;
+            || (item._instruction == CSYNC_INSTRUCTION_IGNORE && instruction != CSYNC_INSTRUCTION_NONE)) {
+        item._instruction = instruction;
         item._modtime = file->modtime;
     } else {
-        if (file->instruction != CSYNC_INSTRUCTION_NONE) {
-            qDebug() << "ERROR: Instruction" << item._instruction << "vs" << file->instruction << "for" << fileUtf8;
+        if (instruction != CSYNC_INSTRUCTION_NONE) {
+            qDebug() << "ERROR: Instruction" << item._instruction << "vs" << instruction << "for" << fileUtf8;
             Q_ASSERT(!"Instructions are both unequal NONE");
             return -1;
         }
@@ -376,10 +357,13 @@ int SyncEngine::treewalkFile( TREE_WALK_FILE *file, bool remote )
         /* No error string */
     }
 
-    item._isDirectory = file->type == CSYNC_FTW_TYPE_DIR;
-    if(item._isDirectory) {
-        item._affectedItems = 0; // defaults to 1 for normal items.
+    if (item._instruction == CSYNC_INSTRUCTION_IGNORE && utf8State.invalidChars > 0) {
+        item._status = SyncFileItem::NormalError;
+        //item._instruction = CSYNC_INSTRUCTION_ERROR;
+        item._errorString = tr("Filename encoding is not valid");
     }
+
+    item._isDirectory = file->type == CSYNC_FTW_TYPE_DIR;
 
     // The etag is already set in the previous sync phases somewhere. Maybe we should remove it there
     // and do it here so we have a consistent state about which tree stores information from which source.
@@ -467,13 +451,16 @@ int SyncEngine::treewalkFile( TREE_WALK_FILE *file, bool remote )
     item._direction = dir;
     // check for blacklisting of this item.
     // if the item is on blacklist, the instruction was set to IGNORE
-    checkBlacklisting( &item );
+    checkErrorBlacklisting( &item );
 
     if (!item._isDirectory) {
         _progressInfo._totalFileCount++;
         if (Progress::isSizeDependent(file->instruction)) {
             _progressInfo._totalSize += file->size;
         }
+    } else if (file->instruction != CSYNC_INSTRUCTION_NONE) {
+        // Added or removed directories certainly count.
+        _progressInfo._totalFileCount++;
     }
     _needsUpdate = true;
 
@@ -529,7 +516,7 @@ void SyncEngine::startSync()
         QVector< SyncJournalDb::PollInfo > pollInfos = _journal->getPollInfos();
         if (!pollInfos.isEmpty()) {
             qDebug() << "Finish Poll jobs before starting a sync";
-            CleanupPollsJob *job = new CleanupPollsJob(pollInfos, AccountManager::instance()->account(),
+            CleanupPollsJob *job = new CleanupPollsJob(pollInfos, _account,
                                                        _journal, _localPath, this);
             connect(job, SIGNAL(finished()), this, SLOT(startSync()));
             connect(job, SIGNAL(aborted(QString)), this, SLOT(slotCleanPollsJobAborted(QString)));
@@ -606,11 +593,7 @@ void SyncEngine::startSync()
     // any way to get "session_key" module property from csync. Had we
     // have it, then we could keep this code and remove it from
     // AbstractCredentials implementations.
-    if (Account *account = AccountManager::instance()->account()) {
-        account->credentials()->syncContextPreStart(_csync_ctx);
-    } else {
-        qDebug() << Q_FUNC_INFO << "No default Account object, huh?";
-    }
+    _account->credentials()->syncContextPreStart(_csync_ctx);
     // if (_lastAuthCookies.length() > 0) {
     //     // Stuff cookies inside csync, then we can avoid the intermediate HTTP 401 reply
     //     // when https://github.com/owncloud/core/pull/4042 is merged.
@@ -745,7 +728,7 @@ void SyncEngine::slotDiscoveryJobFinished(int discoveryResult)
     _journal->commit("post treewalk");
 
     _propagator = QSharedPointer<OwncloudPropagator>(
-        new OwncloudPropagator (session, _localPath, _remoteUrl, _remotePath, _journal, &_thread));
+        new OwncloudPropagator (_account, session, _localPath, _remoteUrl, _remotePath, _journal, &_thread));
     connect(_propagator.data(), SIGNAL(completed(SyncFileItem)),
             this, SLOT(slotJobCompleted(SyncFileItem)));
     connect(_propagator.data(), SIGNAL(progress(SyncFileItem,quint64)),
@@ -758,7 +741,7 @@ void SyncEngine::slotDiscoveryJobFinished(int discoveryResult)
 
     deleteStaleDownloadInfos();
     deleteStaleUploadInfos();
-    deleteStaleBlacklistEntries();
+    deleteStaleErrorBlacklistEntries();
     _journal->commit("post stale entry removal");
 
     // Emit the started signal only after the propagator has been set up.
@@ -1130,9 +1113,16 @@ void SyncEngine::setSelectiveSyncBlackList(const QStringList& list)
 bool SyncEngine::estimateState(QString fn, csync_ftw_type_e t, SyncFileStatus* s)
 {
     Q_UNUSED(t);
+    QString pat(fn);
+    if( t == CSYNC_FTW_TYPE_DIR && ! fn.endsWith(QLatin1Char('/'))) {
+        pat.append(QLatin1Char('/'));
+    }
+
     Q_FOREACH(const SyncFileItem &item, _syncedItems) {
         //qDebug() << Q_FUNC_INFO << fn << item._file << fn.startsWith(item._file) << item._file.startsWith(fn);
-        if (item._file.startsWith(fn)) {
+
+        if (item._file.startsWith(pat) ||
+                item._file == fn /* the same directory or file */) {
             qDebug() << Q_FUNC_INFO << "Setting" << fn << " to STATUS_EVAL";
             s->set(SyncFileStatus::STATUS_EVAL);
             return true;
@@ -1149,6 +1139,11 @@ qint64 SyncEngine::timeSinceFileTouched(const QString& fn) const
         return prop->timeSinceFileTouched(fn);
     }
     return -1;
+}
+
+AccountPtr SyncEngine::account() const
+{
+    return _account;
 }
 
 void SyncEngine::abort()

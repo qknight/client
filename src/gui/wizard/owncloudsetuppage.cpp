@@ -51,6 +51,10 @@ OwncloudSetupPage::OwncloudSetupPage(QWidget *parent)
     setTitle(WizardCommon::titleTemplate().arg(tr("Connect to %1").arg(theme->appNameGUI())));
     setSubTitle(WizardCommon::subTitleTemplate().arg(tr("Setup %1 server").arg(theme->appNameGUI())));
 
+    if (!theme->overrideServerUrl().isEmpty()) {
+        _ui.leUrl->setEnabled(false);
+    }
+
     registerField( QLatin1String("OCUrl*"), _ui.leUrl );
 
     _ui.resultLayout->addWidget( _progressIndi );
@@ -96,6 +100,7 @@ void OwncloudSetupPage::setupCustomization()
 // slot hit from textChanged of the url entry field.
 void OwncloudSetupPage::slotUrlChanged(const QString& url)
 {
+    _authTypeKnown = false;
 
     QString newUrl = url;
     if (url.endsWith("index.php")) {
@@ -155,11 +160,10 @@ void OwncloudSetupPage::initializePage()
         _ui.leUrl->setFocus();
     } else {
         setCommitPage(true);
+        // Hack: setCommitPage() changes caption, but after an error this page could still be visible
+        setButtonText(QWizard::CommitButton, tr("&Next >"));
         validatePage();
         setVisible(false);
-        // because the wizard will call show on us right after this call, we need to hide in the
-        // next event loop iteration.
-        QTimer::singleShot(0, this, SLOT(hide()));
     }
 }
 
@@ -228,8 +232,10 @@ void OwncloudSetupPage::setAuthType (WizardCommon::AuthType type)
   stopSpinner();
 }
 
-void OwncloudSetupPage::setErrorString( const QString& err )
+void OwncloudSetupPage::setErrorString( const QString& err)
 {
+    //FIXME qknight: hacky code ahead
+
     if( err.isEmpty()) {
         _ui.errorLabel->setVisible(false);
     } else {
@@ -304,7 +310,8 @@ void OwncloudSetupPage::slotCertificateAccepted()
         this->_ocWizard->ownCloudCertificatePath = addCertDial->getCertificatePath();
         this->_ocWizard->ownCloudCertificatePasswd = addCertDial->getCertificatePasswd();
 
-        Account* acc = this->_ocWizard->account();
+        //FIXME qknight: hacky code ahead
+        AccountPtr acc = this->_ocWizard->account();
         acc->setCertificate(_ocWizard->ownCloudCertificate, _ocWizard->ownCloudPrivateKey);
 
         QList<QByteArray> qba = sslCertificate.subjectInfoAttributes();
