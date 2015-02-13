@@ -585,11 +585,13 @@ void ConfigFile::setCertificatePath(const QString& cPath)
 
 QString ConfigFile::certificatePasswd() const
 {
-    return retrieveData(QString(), QLatin1String(certPasswd)).toString();
+     qDebug() << __FUNCTION__ << retrieveData(QString(), QLatin1String(certPasswd)).toString();
+     return retrieveData(QString(), QLatin1String(certPasswd)).toString();
 }
 
 void ConfigFile::setCertificatePasswd(const QString& cPasswd)
 {
+     qDebug() << __FUNCTION__ << cPasswd;
      QSettings settings(configFile(), QSettings::IniFormat);
      settings.setValue( QLatin1String(certPasswd), cPasswd);
      settings.sync();

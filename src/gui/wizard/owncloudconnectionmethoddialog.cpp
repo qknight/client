@@ -13,7 +13,7 @@ OwncloudConnectionMethodDialog::OwncloudConnectionMethodDialog(QWidget *parent) 
     connect(ui->btnBack, SIGNAL(clicked(bool)), this, SLOT(returnBack()));
 
     // DM: TLS Client Cert GUI support disabled for now
-    ui->btnClientSideTLS->hide();
+//     ui->btnClientSideTLS->hide();
 }
 
 void OwncloudConnectionMethodDialog::setUrl(const QUrl &url)

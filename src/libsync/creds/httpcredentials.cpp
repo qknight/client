@@ -19,7 +19,7 @@
 #include <QSettings>
 #include <QInputDialog>
 
-#include <keychain.h>
+#include <qt5keychain/keychain.h>
 
 #include "account.h"
 #include "accessmanager.h"
@@ -217,6 +217,7 @@ void HttpCredentials::fetch()
     fetchUser();
     _certificatePath = _account->credentialSetting(QLatin1String(certifPathC)).toString();
     _certificatePasswd = _account->credentialSetting(QLatin1String(certifPasswdC)).toString();
+    qDebug() << __FUNCTION__ << _certificatePasswd;
 
     QSettings *settings = _account->settingsWithGroup(Theme::instance()->appName());
     const QString kck = keychainKey(_account->url().toString(), _user );
@@ -342,6 +343,7 @@ void HttpCredentials::persist()
         // We never connected or fetched the user, there is nothing to save.
         return;
     }
+    qDebug() << __FUNCTION__ << _certificatePasswd;
     _account->setCredentialSetting(QLatin1String(userC), _user);
     _account->setCredentialSetting(QLatin1String(certifPathC), _certificatePath);
     _account->setCredentialSetting(QLatin1String(certifPasswdC), _certificatePasswd);
