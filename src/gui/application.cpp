@@ -91,6 +91,7 @@ Application::Application(int &argc, char **argv) :
     _userTriggeredConnect(false),
     _debugMode(false)
 {
+  qDebug() << __FUNCTION__;
 // TODO: Can't set this without breaking current config pathes
 //    setOrganizationName(QLatin1String(APPLICATION_VENDOR));
     setOrganizationDomain(QLatin1String(APPLICATION_REV_DOMAIN));
@@ -236,6 +237,7 @@ void Application::slotStartUpdateDetector()
 
 void Application::slotCheckConnection()
 {
+  qDebug() << __FUNCTION__;
     AccountState *accountState = AccountStateManager::instance()->accountState();
 
     if( accountState ) {
@@ -300,6 +302,7 @@ void Application::slotUpdateConnectionErrors(int accountState)
 
 void Application::slotownCloudWizardDone( int res )
 {
+  qDebug() << __FUNCTION__;
     FolderMan *folderMan = FolderMan::instance();
     if( res == QDialog::Accepted ) {
         int cnt = folderMan->setupFolders();

@@ -575,13 +575,4 @@ QString ConfigFile::certificatePath() const
     return retrieveData(QString(), QLatin1String(certPath)).toString();
 }
 
-QString ConfigFile::certificatePasswd() const
-{
-  // who reads this value here? -> the 'account' class
-  //FIXME qknight: get the password from the httpcredentials instead and get rid of this qsettings stuff!
-     qDebug() << __FUNCTION__ << "test";
-     return QString("test");
-//      return retrieveData(QString(), QLatin1String(certPasswd)).toString();
-}
-
 } // namespace OCC

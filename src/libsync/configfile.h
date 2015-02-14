@@ -117,7 +117,6 @@ public:
     void restoreGeometryHeader(QHeaderView *header);
 
     QString certificatePath() const;
-    QString certificatePasswd() const;
 
 protected:
     QVariant getPolicySetting(const QString& policy, const QVariant& defaultValue = QVariant()) const;

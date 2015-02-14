@@ -27,6 +27,7 @@ ConnectionValidator::ConnectionValidator(AccountPtr account, QObject *parent)
       _account(account),
       _isCheckingServerAndAuth(false)
 {
+  qDebug() << __FUNCTION__;
 }
 
 QString ConnectionValidator::statusString( Status stat )

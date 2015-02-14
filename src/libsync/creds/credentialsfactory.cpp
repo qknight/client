@@ -12,6 +12,7 @@
  */
 
 #include <QString>
+#include <QDebug>
 
 #include "creds/credentialsfactory.h"
 #ifdef TOKEN_AUTH_ONLY
@@ -37,6 +38,7 @@ AbstractCredentials* create(const QString& type)
 
     // empty string might happen for old version of configuration
     if (type == "http" || type == "") {
+      qDebug() << __FUNCTION__;
         return new HttpCredentialsGui;
     } else if (type == "dummy") {
         return new DummyCredentials;

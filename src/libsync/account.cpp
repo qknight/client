@@ -104,6 +104,7 @@ AccountPtr Account::sharedFromThis()
 
 void Account::save()
 {
+  qDebug() << __FUNCTION__;
     QScopedPointer<QSettings> settings(settingsWithGroup(Theme::instance()->appName()));
     settings->setValue(QLatin1String(urlC), _url.toString());
     if (_credentials) {
@@ -133,6 +134,7 @@ void Account::save()
 
 AccountPtr Account::restore()
 {
+  qDebug() << __FUNCTION__;
     // try to open the correctly themed settings
     QScopedPointer<QSettings> settings(settingsWithGroup(Theme::instance()->appName()));
 
@@ -181,6 +183,7 @@ AccountPtr Account::restore()
         acc->setSharedThis(acc);
 
         acc->setUrl(settings->value(QLatin1String(urlC)).toUrl());
+        qDebug() << __FUNCTION__ << " - " << settings->value(QLatin1String(authTypeC)).toString();
         acc->setCredentials(CredentialsFactory::create(settings->value(QLatin1String(authTypeC)).toString()));
 
         // We want to only restore settings for that auth type and the user value
@@ -314,6 +317,7 @@ QNetworkReply *Account::davRequest(const QByteArray &verb, const QUrl &url, QNet
 
 void Account::setCertificate(const QByteArray certficate, const QString privateKey)
 {
+  qDebug() << __FUNCTION__;
     _pemCertificate=certficate;
     _pemPrivateKey=privateKey;
 }
@@ -329,18 +333,23 @@ QSslConfiguration Account::createSslConfig()
     //  "An internal error number 1060 happened. SSL handshake failed, client certificate was requested: SSL error: sslv3 alert handshake failure"
   
     // maybe this code must not have to be reevaluated every request?
+    qDebug() << __FUNCTION__;
     QSslConfiguration sslConfig;
     QSslCertificate sslClientCertificate;
     
-    // maybe move this code from createSslConfig to the Account constructor
-    //FIXME qknight: have to get the certificatePath and certificatePasswd from httpcredentials instead
     ConfigFile cfgFile;
-    if(!cfgFile.certificatePath().isEmpty() && !cfgFile.certificatePasswd().isEmpty()) {
-        resultP12ToPem certif = p12ToPem(cfgFile.certificatePath().toStdString(), cfgFile.certificatePasswd().toStdString());
+    
+    //FIXME qknight
+    QString _certificatePath="/home/joachim/ClientCert-Datenhalde.p12";
+    QString _certificatePasswd ="test";
+    if(!_certificatePath.isEmpty() && !_certificatePasswd.isEmpty()) {
+        resultP12ToPem certif = p12ToPem(_certificatePath.toStdString(), _certificatePasswd.toStdString());
         QString s = QString::fromStdString(certif.Certificate);
         QByteArray ba = s.toLocal8Bit();
-        this->setCertificate(ba, QString::fromStdString(certif.PrivateKey));
+        setCertificate(ba, QString::fromStdString(certif.PrivateKey));
     }
+    
+    
     if((!_pemCertificate.isEmpty())&&(!_pemPrivateKey.isEmpty())) {
         // Read certificates
         QList<QSslCertificate> sslCertificateList = QSslCertificate::fromData(_pemCertificate, QSsl::Pem);

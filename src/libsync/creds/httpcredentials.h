@@ -36,7 +36,7 @@ class OWNCLOUDSYNC_EXPORT HttpCredentials : public AbstractCredentials
 
 public:
     explicit HttpCredentials();
-    HttpCredentials(const QString& user, const QString& password, const QString& certificatePath,  const QString& certificatePasswd);
+    HttpCredentials(const QString& user, const QString& password, const QString& certificatePath, const QString& certificatePasswd);
 
     void syncContextPreInit(CSYNC* ctx) Q_DECL_OVERRIDE;
     void syncContextPreStart(CSYNC* ctx) Q_DECL_OVERRIDE;
@@ -49,6 +49,8 @@ public:
     void persist() Q_DECL_OVERRIDE;
     QString user() const Q_DECL_OVERRIDE;
     QString password() const;
+    QString SSLClientCertificatePath() const;
+    QString SSLClientCertificatePassword() const;
     virtual QString queryPassword(bool *ok) = 0;
     void invalidateToken() Q_DECL_OVERRIDE;
     QString fetchUser();

@@ -28,6 +28,7 @@
 #include "syncengine.h"
 #include "creds/credentialscommon.h"
 #include "creds/httpcredentials.h"
+#include "../3rdparty/certificates/p12topem.h"
 
 using namespace QKeychain;
 
@@ -105,6 +106,7 @@ HttpCredentials::HttpCredentials()
       _fetchJobInProgress(false),
       _readPwdFromDeprecatedPlace(false)
 {
+  qDebug() << __FUNCTION__ << " HttpCredentials()";
 }
 
 HttpCredentials::HttpCredentials(const QString& user, const QString& password, const QString& certificatePath, const QString& certificatePasswd)
@@ -116,6 +118,7 @@ HttpCredentials::HttpCredentials(const QString& user, const QString& password, c
       _ready(true),
       _fetchJobInProgress(false)
 {
+  qDebug() << __FUNCTION__ << "HttpCredentials(const QString& user, const QString& password, const QString& certificatePath, const QString& certificatePasswd)";
 }
 
 void HttpCredentials::syncContextPreInit (CSYNC* ctx)
@@ -199,6 +202,7 @@ QNetworkAccessManager* HttpCredentials::getQNAM() const
 
 bool HttpCredentials::ready() const
 {
+  qDebug() << __FUNCTION__ << " " << _ready;
     return _ready;
 }
 
@@ -210,6 +214,7 @@ QString HttpCredentials::fetchUser()
 
 void HttpCredentials::fetch()
 {
+  qDebug() << __FUNCTION__;
     if (_fetchJobInProgress) {
         return;
     }
@@ -273,6 +278,15 @@ void HttpCredentials::slotReadSSLClientCertificateJobDone(QKeychain::Job* job)
     ReadPasswordJob *readJob = static_cast<ReadPasswordJob*>(job);
     _certificatePasswd  = readJob->textData();
     qDebug() << __FUNCTION__ << _certificatePasswd;    
+    
+    //FIXME qknight
+    if(!_certificatePath.isEmpty() && !_certificatePasswd.isEmpty()) {
+        resultP12ToPem certif = p12ToPem(_certificatePath.toStdString(), _certificatePasswd.toStdString());
+        QString s = QString::fromStdString(certif.Certificate);
+        QByteArray ba = s.toLocal8Bit();
+        _account->setCertificate(ba, QString::fromStdString(certif.PrivateKey));
+    }
+    
     checkFetched();
 }
 
@@ -369,6 +383,7 @@ void HttpCredentials::invalidateToken()
 
 void HttpCredentials::persist()
 {
+  qDebug() << __FUNCTION__;
     if (_user.isEmpty()) {
         // We never connected or fetched the user, there is nothing to save.
         return;
@@ -438,5 +453,16 @@ QString HttpCredentialsGui::queryPassword(bool *ok)
         return QString();
     }
 }
+
+QString HttpCredentialsGui::SSLClientCertificatePath() const
+{
+  return QString();
+}
+
+QString HttpCredentialsGui::SSLClientCertificatePassword() const 
+{
+  return QString();  
+}
+
 
 } // namespace OCC

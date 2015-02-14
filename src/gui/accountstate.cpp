@@ -24,6 +24,7 @@ Q_GLOBAL_STATIC(AccountStateManager, g_accountStateManager)
 
 AccountStateManager *AccountStateManager::instance()
 {
+  qDebug() << __FUNCTION__;
     return g_accountStateManager();
 }
 
@@ -59,6 +60,7 @@ AccountState::AccountState(AccountPtr account)
     , _connectionStatus(ConnectionValidator::Undefined)
     , _waitingForNewCredentials(false)
 {
+  qDebug() << __FUNCTION__;
     qRegisterMetaType<AccountState*>("AccountState*");
 
     connect(account.data(), SIGNAL(invalidCredentials()),
@@ -159,6 +161,7 @@ QuotaInfo *AccountState::quotaInfo()
 
 void AccountState::checkConnectivity()
 {
+  qDebug() << __FUNCTION__;
     if (isSignedOut() || _waitingForNewCredentials) {
         return;
     }
@@ -232,6 +235,7 @@ void AccountState::slotInvalidCredentials()
 
 void AccountState::slotCredentialsFetched(AbstractCredentials* credentials)
 {
+  qDebug() << __FUNCTION__;
     _waitingForNewCredentials = false;
 
     if (!credentials->ready()) {

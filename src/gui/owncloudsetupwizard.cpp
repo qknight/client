@@ -41,6 +41,7 @@ OwncloudSetupWizard::OwncloudSetupWizard(QObject* parent) :
     _ocWizard(new OwncloudWizard),
     _remoteFolder()
 {
+  qDebug() << __FUNCTION__;
     connect( _ocWizard, SIGNAL(determineAuthType(const QString&)),
              this, SLOT(slotDetermineAuthType(const QString&)));
     connect( _ocWizard, SIGNAL(connectToOCUrl( const QString& ) ),
