@@ -49,8 +49,6 @@ public:
     void persist() Q_DECL_OVERRIDE;
     QString user() const Q_DECL_OVERRIDE;
     QString password() const;
-    QString SSLClientCertificatePath() const;
-    QString SSLClientCertificatePassword() const;
     virtual QString queryPassword(bool *ok) = 0;
     void invalidateToken() Q_DECL_OVERRIDE;
     QString fetchUser();

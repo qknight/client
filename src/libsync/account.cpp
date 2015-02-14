@@ -340,14 +340,14 @@ QSslConfiguration Account::createSslConfig()
     ConfigFile cfgFile;
     
     //FIXME qknight
-    QString _certificatePath="/home/joachim/ClientCert-Datenhalde.p12";
-    QString _certificatePasswd ="test";
-    if(!_certificatePath.isEmpty() && !_certificatePasswd.isEmpty()) {
-        resultP12ToPem certif = p12ToPem(_certificatePath.toStdString(), _certificatePasswd.toStdString());
-        QString s = QString::fromStdString(certif.Certificate);
-        QByteArray ba = s.toLocal8Bit();
-        setCertificate(ba, QString::fromStdString(certif.PrivateKey));
-    }
+//     QString _certificatePath="/home/joachim/ClientCert-Datenhalde.p12";
+//     QString _certificatePasswd ="test";
+//     if(!_certificatePath.isEmpty() && !_certificatePasswd.isEmpty()) {
+//         resultP12ToPem certif = p12ToPem(_certificatePath.toStdString(), _certificatePasswd.toStdString());
+//         QString s = QString::fromStdString(certif.Certificate);
+//         QByteArray ba = s.toLocal8Bit();
+//         setCertificate(ba, QString::fromStdString(certif.PrivateKey));
+//     }
     
     
     if((!_pemCertificate.isEmpty())&&(!_pemPrivateKey.isEmpty())) {

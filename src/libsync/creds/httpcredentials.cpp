@@ -454,15 +454,6 @@ QString HttpCredentialsGui::queryPassword(bool *ok)
     }
 }
 
-QString HttpCredentialsGui::SSLClientCertificatePath() const
-{
-  return QString();
-}
-
-QString HttpCredentialsGui::SSLClientCertificatePassword() const 
-{
-  return QString();  
-}
 
 
 } // namespace OCC

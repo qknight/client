@@ -46,8 +46,6 @@ public:
     virtual bool changed(AbstractCredentials* credentials) const = 0;
     virtual QString authType() const = 0;
     virtual QString user() const = 0;
-    virtual QString SSLClientCertificatePath() const = 0;
-    virtual QString SSLClientCertificatePassword() const = 0;
     virtual QNetworkAccessManager* getQNAM() const = 0;
     virtual bool ready() const = 0;
     virtual void fetch() = 0;

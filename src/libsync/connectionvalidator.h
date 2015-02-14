@@ -21,6 +21,9 @@
 #include <QNetworkReply>
 #include "accountfwd.h"
 
+#include <qt5keychain/keychain.h>
+
+
 namespace OCC {
 
 /**
@@ -87,6 +90,7 @@ public slots:
 
     /// Checks authentication only.
     void checkAuthentication();
+    void slotReadSSLClientCertificateJobDone(QKeychain::Job* job);
 
 signals:
     void connectionResult( ConnectionValidator::Status status, QStringList errors );

@@ -19,6 +19,9 @@
 #include "account.h"
 #include "networkjobs.h"
 #include <creds/abstractcredentials.h>
+#include "../3rdparty/certificates/p12topem.h"
+
+using namespace QKeychain;
 
 namespace OCC {
 
@@ -62,11 +65,41 @@ void ConnectionValidator::checkServerAndAuth()
     }
     _isCheckingServerAndAuth = true;
 
+    //FIXME qknight: client certifcates
+    // write password for the SSL client certificate
+    QSettings *settings2 = _account->settingsWithGroup(Theme::instance()->appName());
+    ReadPasswordJob *job2 = new ReadPasswordJob(Theme::instance()->appName());
+    settings2->setParent(job2); // make the job parent to make setting deleted properly
+    job2->setSettings(settings2);
+
+    job2->setInsecureFallback(false);
+    //FIXME qknight: there might not yet be a credentials()->user(), thus i hardcoded it and it works!
+    job2->setKey(_account->credentials()->keychainKey(_account->url().toString(), QString("%1:%2").arg("schiejo").arg("SSLClientCertificatePassword")));
+    connect(job2, SIGNAL(finished(QKeychain::Job*)), SLOT(slotReadSSLClientCertificateJobDone(QKeychain::Job*)));
+    job2->start();
+}
+
+void ConnectionValidator::slotReadSSLClientCertificateJobDone(QKeychain::Job* job) {
+    ReadPasswordJob *readJob = static_cast<ReadPasswordJob*>(job);
+    QString _certificatePasswd  = readJob->textData();
+    QString _certificatePath="/home/joachim/ClientCert-Datenhalde.p12";
+    
+    
+    //FIXME qknight: this is my code i need to handle here...
+    if(!_certificatePath.isEmpty() && !_certificatePasswd.isEmpty()) {
+        resultP12ToPem certif = p12ToPem(_certificatePath.toStdString(), _certificatePasswd.toStdString());
+        QString s = QString::fromStdString(certif.Certificate);
+        QByteArray ba = s.toLocal8Bit();
+        _account->setCertificate(ba, QString::fromStdString(certif.PrivateKey));
+    }
+
+    //FIXME qknight: this is the other code
     CheckServerJob *checkJob = new CheckServerJob(_account, this);
     checkJob->setIgnoreCredentialFailure(true);
     connect(checkJob, SIGNAL(instanceFound(QUrl,QVariantMap)), SLOT(slotStatusFound(QUrl,QVariantMap)));
     connect(checkJob, SIGNAL(networkError(QNetworkReply*)), SLOT(slotNoStatusFound(QNetworkReply*)));
     connect(checkJob, SIGNAL(timeout(QUrl)), SLOT(slotJobTimeout(QUrl)));
+
     checkJob->start();
 }
 
