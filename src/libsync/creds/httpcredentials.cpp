@@ -76,7 +76,6 @@ namespace
 {
 const char userC[] = "user";
 const char certifPathC[] = "certificatePath";
-const char certifPasswdC[] = "certificatePasswd";
 const char authenticationFailedC[] = "owncloud-authentication-failed";
 } // ns
 
@@ -101,6 +100,7 @@ HttpCredentials::HttpCredentials()
       _password(),
       _certificatePath(),
       _certificatePasswd(),
+      _fetchKeyCount(0),
       _ready(false),
       _fetchJobInProgress(false),
       _readPwdFromDeprecatedPlace(false)
@@ -112,6 +112,7 @@ HttpCredentials::HttpCredentials(const QString& user, const QString& password, c
       _password(password),
       _certificatePath(certificatePath),
       _certificatePasswd(certificatePasswd),
+      _fetchKeyCount(0),
       _ready(true),
       _fetchJobInProgress(false)
 {
@@ -216,8 +217,6 @@ void HttpCredentials::fetch()
     // User must be fetched from config file
     fetchUser();
     _certificatePath = _account->credentialSetting(QLatin1String(certifPathC)).toString();
-    _certificatePasswd = _account->credentialSetting(QLatin1String(certifPasswdC)).toString();
-    qDebug() << __FUNCTION__ << _certificatePasswd;
 
     QSettings *settings = _account->settingsWithGroup(Theme::instance()->appName());
     const QString kck = keychainKey(_account->url().toString(), _user );
@@ -236,6 +235,7 @@ void HttpCredentials::fetch()
         settings->deleteLater();
         Q_EMIT fetched();
     } else {
+        // write account _password
         ReadPasswordJob *job = new ReadPasswordJob(Theme::instance()->appName());
         settings->setParent(job); // make the job parent to make setting deleted properly
         job->setSettings(settings);
@@ -244,6 +244,18 @@ void HttpCredentials::fetch()
         job->setKey(kck);
         connect(job, SIGNAL(finished(QKeychain::Job*)), SLOT(slotReadJobDone(QKeychain::Job*)));
         job->start();
+
+        // write password for the SSL client certificate
+        QSettings *settings2 = _account->settingsWithGroup(Theme::instance()->appName());
+        ReadPasswordJob *job2 = new ReadPasswordJob(Theme::instance()->appName());
+        settings2->setParent(job2); // make the job parent to make setting deleted properly
+        job2->setSettings(settings2);
+
+        job2->setInsecureFallback(false);
+        job2->setKey(keychainKey(_account->url().toString(), QString("%1:%2").arg(_user).arg("SSLClientCertificatePassword")));
+        connect(job2, SIGNAL(finished(QKeychain::Job*)), SLOT(slotReadSSLClientCertificateJobDone(QKeychain::Job*)));
+        job2->start();
+
         _fetchJobInProgress = true;
         _readPwdFromDeprecatedPlace = true;
     }
@@ -256,10 +268,20 @@ bool HttpCredentials::stillValid(QNetworkReply *reply)
                 || !reply->property(authenticationFailedC).toBool()));
 }
 
+void HttpCredentials::slotReadSSLClientCertificateJobDone(QKeychain::Job* job) 
+{
+    ReadPasswordJob *readJob = static_cast<ReadPasswordJob*>(job);
+    _certificatePasswd  = readJob->textData();
+    qDebug() << __FUNCTION__ << _certificatePasswd;    
+    checkFetched();
+}
+
 void HttpCredentials::slotReadJobDone(QKeychain::Job *job)
 {
     ReadPasswordJob *readJob = static_cast<ReadPasswordJob*>(job);
     _password = readJob->textData();
+    qDebug() << __FUNCTION__ << _password ;    
+
 
     if( _user.isEmpty()) {
         qDebug() << "Strange: User is empty!";
@@ -274,7 +296,7 @@ void HttpCredentials::slotReadJobDone(QKeychain::Job *job)
         // Still, the password can be empty which indicates a problem and
         // the password dialog has to be opened.
         _ready = true;
-        emit fetched();
+        checkFetched();
     } else {
         // we come here if the password is empty or any other keychain
         // error happend.
@@ -307,8 +329,16 @@ void HttpCredentials::slotReadJobDone(QKeychain::Job *job)
                 _password = QString::null;
                 _ready = false;
             }
-            emit fetched();
+            checkFetched();
         }
+    }
+}
+
+void HttpCredentials::checkFetched() {
+  qDebug() << __FUNCTION__;
+    if (++_fetchKeyCount == 2) {
+      qDebug() << __FUNCTION__ << "emit fetched()!";
+        emit fetched();
     }
 }
 
@@ -343,10 +373,10 @@ void HttpCredentials::persist()
         // We never connected or fetched the user, there is nothing to save.
         return;
     }
-    qDebug() << __FUNCTION__ << _certificatePasswd;
     _account->setCredentialSetting(QLatin1String(userC), _user);
     _account->setCredentialSetting(QLatin1String(certifPathC), _certificatePath);
-    _account->setCredentialSetting(QLatin1String(certifPasswdC), _certificatePasswd);
+    
+    // write account _password
     WritePasswordJob *job = new WritePasswordJob(Theme::instance()->appName());
     QSettings *settings = _account->settingsWithGroup(Theme::instance()->appName());
     settings->setParent(job); // make the job parent to make setting deleted properly
@@ -357,10 +387,23 @@ void HttpCredentials::persist()
     job->setKey(keychainKey(_account->url().toString(), _user));
     job->setTextData(_password);
     job->start();
+    
+    // write password for the SSL client certificate
+    WritePasswordJob *job2 = new WritePasswordJob(Theme::instance()->appName());
+    QSettings *settings2 = _account->settingsWithGroup(Theme::instance()->appName());
+    settings2->setParent(job2); // make the job parent to make setting deleted properly
+    job2->setSettings(settings2);
+
+    job2->setInsecureFallback(false);
+    connect(job2, SIGNAL(finished(QKeychain::Job*)), SLOT(slotWriteJobDone(QKeychain::Job*)));
+    job2->setKey(keychainKey(_account->url().toString(), QString("%1:%2").arg(_user).arg("SSLClientCertificatePassword")));
+    job2->setTextData(_certificatePasswd);
+    job2->start();
 }
 
 void HttpCredentials::slotWriteJobDone(QKeychain::Job *job)
 {
+    qDebug() << __FUNCTION__ ;
     delete job->settings();
     switch (job->error()) {
     case NoError:

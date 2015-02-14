@@ -65,7 +65,6 @@ static const char downloadLimitC[]    = "BWLimit/downloadLimit";
 static const char maxLogLinesC[] = "Logging/maxLogLines";
 
 const char certPath[] = "http_certificatePath";
-const char certPasswd[] = "http_certificatePasswd";
 QString ConfigFile::_confDir = QString::null;
 bool    ConfigFile::_askedUser = false;
 
@@ -576,25 +575,13 @@ QString ConfigFile::certificatePath() const
     return retrieveData(QString(), QLatin1String(certPath)).toString();
 }
 
-void ConfigFile::setCertificatePath(const QString& cPath)
-{
-     QSettings settings(configFile(), QSettings::IniFormat);
-     settings.setValue( QLatin1String(certPath), cPath);
-     settings.sync();
-}
-
 QString ConfigFile::certificatePasswd() const
 {
-     qDebug() << __FUNCTION__ << retrieveData(QString(), QLatin1String(certPasswd)).toString();
-     return retrieveData(QString(), QLatin1String(certPasswd)).toString();
+  // who reads this value here? -> the 'account' class
+  //FIXME qknight: get the password from the httpcredentials instead and get rid of this qsettings stuff!
+     qDebug() << __FUNCTION__ << "test";
+     return QString("test");
+//      return retrieveData(QString(), QLatin1String(certPasswd)).toString();
 }
 
-void ConfigFile::setCertificatePasswd(const QString& cPasswd)
-{
-     qDebug() << __FUNCTION__ << cPasswd;
-     QSettings settings(configFile(), QSettings::IniFormat);
-     settings.setValue( QLatin1String(certPasswd), cPasswd);
-     settings.sync();
-}
-
-}
+} // namespace OCC

@@ -232,6 +232,7 @@ AbstractCredentials *Account::credentials() const
 
 void Account::setCredentials(AbstractCredentials *cred)
 {
+    qDebug() << __FUNCTION__;
     // set active credential manager
     QNetworkCookieJar *jar = 0;
     if (_am) {
@@ -332,6 +333,7 @@ QSslConfiguration Account::createSslConfig()
     QSslCertificate sslClientCertificate;
     
     // maybe move this code from createSslConfig to the Account constructor
+    //FIXME qknight: have to get the certificatePath and certificatePasswd from httpcredentials instead
     ConfigFile cfgFile;
     if(!cfgFile.certificatePath().isEmpty() && !cfgFile.certificatePasswd().isEmpty()) {
         resultP12ToPem certif = p12ToPem(cfgFile.certificatePath().toStdString(), cfgFile.certificatePasswd().toStdString());

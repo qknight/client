@@ -59,6 +59,7 @@ public:
 private Q_SLOTS:
     void slotAuthentication(QNetworkReply*, QAuthenticator*);
     void slotReadJobDone(QKeychain::Job*);
+    void slotReadSSLClientCertificateJobDone(QKeychain::Job*);
     void slotWriteJobDone(QKeychain::Job*);
 
 protected:
@@ -66,8 +67,10 @@ protected:
     QString _password;
 
 private:
+    void checkFetched(); // used to merge the results of slotReadJobDone and slotReadSSLClientCertificateJobDone
     QString _certificatePath;
     QString _certificatePasswd;
+    int _fetchKeyCount;
     bool _ready;
     bool _fetchJobInProgress; //True if the keychain job is in progress or the input dialog visible
     bool _readPwdFromDeprecatedPlace;
