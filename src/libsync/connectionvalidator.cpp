@@ -82,8 +82,8 @@ void ConnectionValidator::checkServerAndAuth()
 void ConnectionValidator::slotReadSSLClientCertificateJobDone(QKeychain::Job* job) {
     ReadPasswordJob *readJob = static_cast<ReadPasswordJob*>(job);
     QString _certificatePasswd  = readJob->textData();
+    //FIXME qknight: warning, hardcoded path!
     QString _certificatePath="/home/joachim/ClientCert-Datenhalde.p12";
-    
     
     //FIXME qknight: this is my code i need to handle here...
     if(!_certificatePath.isEmpty() && !_certificatePasswd.isEmpty()) {
